@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>502 на ingress, 302 в приложении: как я учил инфраструктурного LLM-агента не врать</title>
+  <meta name="description" content="Практический разбор production read-only LLM-агента для инфраструктурной диагностики: typed context, MCP-контракты, evidence и real-model evaluation.">
+  <meta name="robots" content="index,follow">
+  <meta name="theme-color" content="#11231f">
+  <meta property="og:type" content="article">
+  <meta property="og:locale" content="ru_RU">
+  <meta property="og:title" content="502 на ingress, 302 в приложении: как я учил инфраструктурного LLM-агента не врать">
+  <meta property="og:description" content="Практический разбор production read-only LLM-агента для инфраструктурной диагностики: typed context, MCP-контракты, evidence и real-model evaluation.">
+  <meta property="og:image" content="assets/article-cover-habr.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><rect width=%2264%22 height=%2264%22 rx=%228%22 fill=%22%2311231f%22/><text x=%2232%22 y=%2242%22 text-anchor=%22middle%22 font-family=%22monospace%22 font-size=%2230%22 fill=%22%23f4f8f6%22>502</text></svg>">
+  <link rel="stylesheet" href="styles.css">
+  <script type="application/ld+json">
+    {
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "502 на ingress, 302 в приложении: как я учил инфраструктурного LLM-агента не врать",
+  "description": "Практический разбор production read-only LLM-агента для инфраструктурной диагностики: typed context, MCP-контракты, evidence и real-model evaluation.",
+  "inLanguage": "ru-RU",
+  "image": "assets/article-cover-habr.png",
+  "keywords": [
+    "LLM agents",
+    "SRE",
+    "DevOps",
+    "MCP",
+    "Kubernetes",
+    "evaluation"
+  ]
+}
+  </script>
+</head>
+<body>
+  <div class="reading-progress" aria-hidden="true"><span></span></div>
+  <header class="site-header">
+    <a class="site-mark" href="#top" aria-label="В начало статьи">LLM × INFRA</a>
+    <div class="site-meta">
+      <span>Практический разбор</span>
+      <span>17 минут</span>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero" aria-labelledby="article-title">
+      <h1 id="article-title" class="sr-only">502 на ingress, 302 в приложении: как я учил инфраструктурного LLM-агента не врать</h1>
+      <img src="assets/article-cover-habr.png" alt="502 на ingress, 302 в приложении: как я учил инфраструктурного LLM-агента не врать" width="780" height="440">
+      <div class="hero-caption">
+        <span>Go · MCP · Kubernetes · LLM evaluation</span>
+        <span>3 982 слов</span>
+      </div>
+    </section>
+
+    <details class="mobile-toc">
+      <summary>Оглавление</summary>
+      <nav aria-label="Оглавление статьи"><ul class="toc-list"><li><a href="#korotko" data-section="korotko">Коротко</a></li><li><a href="#zachem-voobsche-natural-language-v-infrastrukture" data-section="zachem-voobsche-natural-language-v-infrastrukture">Зачем вообще natural language в инфраструктуре</a></li><li><a href="#pervaya-versiya-tools-est-otveta-vse-ravno-net" data-section="pervaya-versiya-tools-est-otveta-vse-ravno-net">Первая версия: tools есть, ответа всё равно нет</a></li><li><a href="#arhitektura-llm-vnutri-sistemy-a-ne-vokrug-nee" data-section="arhitektura-llm-vnutri-sistemy-a-ne-vokrug-nee">Архитектура: LLM внутри системы, а не вокруг неё</a></li><li><a href="#kontrakt-instrumenta-vazhnee-ego-opisaniya" data-section="kontrakt-instrumenta-vazhnee-ego-opisaniya">Контракт инструмента важнее его описания</a></li><li><a href="#planirovat-nuzhno-voprosy-a-ne-nazvaniya-tools" data-section="planirovat-nuzhno-voprosy-a-ne-nazvaniya-tools">Планировать нужно вопросы, а не названия tools</a></li><li><a href="#kak-ne-pokazat-modeli-ves-katalog-srazu" data-section="kak-ne-pokazat-modeli-ves-katalog-srazu">Как не показать модели весь каталог сразу</a></li><li><a href="#bolshie-rezultaty-ne-dolzhny-zhit-v-prompt" data-section="bolshie-rezultaty-ne-dolzhny-zhit-v-prompt">Большие результаты не должны жить в prompt</a></li><li><a href="#razbor-togo-samogo-502" data-section="razbor-togo-samogo-502">Разбор того самого 502</a><ul class="toc-sublist"><li><a href="#1-simptom" data-section="1-simptom">1. Симптом</a></li><li><a href="#2-tochnyy-error-log-a-ne-obschiy-obzor-5xx" data-section="2-tochnyy-error-log-a-ne-obschiy-obzor-5xx">2. Точный error log, а не общий обзор 5xx</a></li><li><a href="#3-chto-imenno-okazalos-bolshim" data-section="3-chto-imenno-okazalos-bolshim">3. Что именно оказалось большим</a></li><li><a href="#4-pochemu-pervyy-otvet-byl-opasen" data-section="4-pochemu-pervyy-otvet-byl-opasen">4. Почему первый ответ был опасен</a></li></ul></li><li><a href="#tot-zhe-502-drugaya-prichina" data-section="tot-zhe-502-drugaya-prichina">Тот же 502, другая причина</a></li><li><a href="#vtoroy-korotkiy-keys-kto-imenno-deploil" data-section="vtoroy-korotkiy-keys-kto-imenno-deploil">Второй короткий кейс: кто именно деплоил</a></li><li><a href="#pamyat-tri-mehanizma-vmesto-odnogo" data-section="pamyat-tri-mehanizma-vmesto-odnogo">Память: три механизма вместо одного</a><ul class="toc-sublist"><li><a href="#kontekst-treda" data-section="kontekst-treda">Контекст треда</a></li><li><a href="#korotkaya-rabochaya-pamyat" data-section="korotkaya-rabochaya-pamyat">Короткая рабочая память</a></li><li><a href="#podtverzhdennoe-operational-knowledge" data-section="podtverzhdennoe-operational-knowledge">Подтверждённое operational knowledge</a></li></ul></li><li><a href="#komanda-dobavlyaet-skills-bez-reliza-yadra" data-section="komanda-dobavlyaet-skills-bez-reliza-yadra">Команда добавляет skills без релиза ядра</a></li><li><a href="#pochemu-ya-ne-dobavil-langchain-i-vector-db" data-section="pochemu-ya-ne-dobavil-langchain-i-vector-db">Почему я не добавил LangChain и vector DB</a></li><li><a href="#evaluation-vmesto-vrode-stalo-luchshe" data-section="evaluation-vmesto-vrode-stalo-luchshe">Evaluation вместо «вроде стало лучше»</a></li><li><a href="#kak-zdes-vyglyadel-vaybkoding" data-section="kak-zdes-vyglyadel-vaybkoding">Как здесь выглядел вайбкодинг</a></li><li><a href="#read-only-tozhe-trebuet-modeli-ugroz" data-section="read-only-tozhe-trebuet-modeli-ugroz">Read-only тоже требует модели угроз</a><ul class="toc-sublist"><li><a href="#prompt-injection" data-section="prompt-injection">Prompt injection</a></li><li><a href="#access-policy" data-section="access-policy">Access policy</a></li><li><a href="#ssrf-i-network-checker" data-section="ssrf-i-network-checker">SSRF и network checker</a></li><li><a href="#redaction" data-section="redaction">Redaction</a></li><li><a href="#degradaciya" data-section="degradaciya">Деградация</a></li></ul></li><li><a href="#chto-v-itoge-poluchilos-a-chto-esche-net" data-section="chto-v-itoge-poluchilos-a-chto-esche-net">Что в итоге получилось, а что ещё нет</a></li><li><a href="#chto-mozhno-povtorit-bez-kopirovaniya-vsey-sistemy" data-section="chto-mozhno-povtorit-bez-kopirovaniya-vsey-sistemy">Что можно повторить без копирования всей системы</a></li><li><a href="#vyvody-kotorye-ya-zabral-iz-etoy-raboty" data-section="vyvody-kotorye-ya-zabral-iz-etoy-raboty">Выводы, которые я забрал из этой работы</a></li><li><a href="#materialy" data-section="materialy">Материалы</a></li></ul></nav>
+    </details>
+
+    <div class="article-layout">
+      <aside class="desktop-toc">
+        <nav aria-label="Оглавление статьи">
+          <p class="toc-title">Оглавление</p>
+          <ul class="toc-list"><li><a href="#korotko" data-section="korotko">Коротко</a></li><li><a href="#zachem-voobsche-natural-language-v-infrastrukture" data-section="zachem-voobsche-natural-language-v-infrastrukture">Зачем вообще natural language в инфраструктуре</a></li><li><a href="#pervaya-versiya-tools-est-otveta-vse-ravno-net" data-section="pervaya-versiya-tools-est-otveta-vse-ravno-net">Первая версия: tools есть, ответа всё равно нет</a></li><li><a href="#arhitektura-llm-vnutri-sistemy-a-ne-vokrug-nee" data-section="arhitektura-llm-vnutri-sistemy-a-ne-vokrug-nee">Архитектура: LLM внутри системы, а не вокруг неё</a></li><li><a href="#kontrakt-instrumenta-vazhnee-ego-opisaniya" data-section="kontrakt-instrumenta-vazhnee-ego-opisaniya">Контракт инструмента важнее его описания</a></li><li><a href="#planirovat-nuzhno-voprosy-a-ne-nazvaniya-tools" data-section="planirovat-nuzhno-voprosy-a-ne-nazvaniya-tools">Планировать нужно вопросы, а не названия tools</a></li><li><a href="#kak-ne-pokazat-modeli-ves-katalog-srazu" data-section="kak-ne-pokazat-modeli-ves-katalog-srazu">Как не показать модели весь каталог сразу</a></li><li><a href="#bolshie-rezultaty-ne-dolzhny-zhit-v-prompt" data-section="bolshie-rezultaty-ne-dolzhny-zhit-v-prompt">Большие результаты не должны жить в prompt</a></li><li><a href="#razbor-togo-samogo-502" data-section="razbor-togo-samogo-502">Разбор того самого 502</a><ul class="toc-sublist"><li><a href="#1-simptom" data-section="1-simptom">1. Симптом</a></li><li><a href="#2-tochnyy-error-log-a-ne-obschiy-obzor-5xx" data-section="2-tochnyy-error-log-a-ne-obschiy-obzor-5xx">2. Точный error log, а не общий обзор 5xx</a></li><li><a href="#3-chto-imenno-okazalos-bolshim" data-section="3-chto-imenno-okazalos-bolshim">3. Что именно оказалось большим</a></li><li><a href="#4-pochemu-pervyy-otvet-byl-opasen" data-section="4-pochemu-pervyy-otvet-byl-opasen">4. Почему первый ответ был опасен</a></li></ul></li><li><a href="#tot-zhe-502-drugaya-prichina" data-section="tot-zhe-502-drugaya-prichina">Тот же 502, другая причина</a></li><li><a href="#vtoroy-korotkiy-keys-kto-imenno-deploil" data-section="vtoroy-korotkiy-keys-kto-imenno-deploil">Второй короткий кейс: кто именно деплоил</a></li><li><a href="#pamyat-tri-mehanizma-vmesto-odnogo" data-section="pamyat-tri-mehanizma-vmesto-odnogo">Память: три механизма вместо одного</a><ul class="toc-sublist"><li><a href="#kontekst-treda" data-section="kontekst-treda">Контекст треда</a></li><li><a href="#korotkaya-rabochaya-pamyat" data-section="korotkaya-rabochaya-pamyat">Короткая рабочая память</a></li><li><a href="#podtverzhdennoe-operational-knowledge" data-section="podtverzhdennoe-operational-knowledge">Подтверждённое operational knowledge</a></li></ul></li><li><a href="#komanda-dobavlyaet-skills-bez-reliza-yadra" data-section="komanda-dobavlyaet-skills-bez-reliza-yadra">Команда добавляет skills без релиза ядра</a></li><li><a href="#pochemu-ya-ne-dobavil-langchain-i-vector-db" data-section="pochemu-ya-ne-dobavil-langchain-i-vector-db">Почему я не добавил LangChain и vector DB</a></li><li><a href="#evaluation-vmesto-vrode-stalo-luchshe" data-section="evaluation-vmesto-vrode-stalo-luchshe">Evaluation вместо «вроде стало лучше»</a></li><li><a href="#kak-zdes-vyglyadel-vaybkoding" data-section="kak-zdes-vyglyadel-vaybkoding">Как здесь выглядел вайбкодинг</a></li><li><a href="#read-only-tozhe-trebuet-modeli-ugroz" data-section="read-only-tozhe-trebuet-modeli-ugroz">Read-only тоже требует модели угроз</a><ul class="toc-sublist"><li><a href="#prompt-injection" data-section="prompt-injection">Prompt injection</a></li><li><a href="#access-policy" data-section="access-policy">Access policy</a></li><li><a href="#ssrf-i-network-checker" data-section="ssrf-i-network-checker">SSRF и network checker</a></li><li><a href="#redaction" data-section="redaction">Redaction</a></li><li><a href="#degradaciya" data-section="degradaciya">Деградация</a></li></ul></li><li><a href="#chto-v-itoge-poluchilos-a-chto-esche-net" data-section="chto-v-itoge-poluchilos-a-chto-esche-net">Что в итоге получилось, а что ещё нет</a></li><li><a href="#chto-mozhno-povtorit-bez-kopirovaniya-vsey-sistemy" data-section="chto-mozhno-povtorit-bez-kopirovaniya-vsey-sistemy">Что можно повторить без копирования всей системы</a></li><li><a href="#vyvody-kotorye-ya-zabral-iz-etoy-raboty" data-section="vyvody-kotorye-ya-zabral-iz-etoy-raboty">Выводы, которые я забрал из этой работы</a></li><li><a href="#materialy" data-section="materialy">Материалы</a></li></ul>
+        </nav>
+      </aside>
+
+      <article class="article-body">
+        <p>Сначала контекст. Я делаю внутреннего read-only агента для инфраструктурных расследований: он может читать данные, но не изменять production. Инженер пишет ему в Mattermost или резервном web-чате обычный вопрос: «почему сервис отдаёт 502?», «кто выкатил эту версию?» или «что изменилось перед инцидентом?». Агент сам собирает данные из Kubernetes, VictoriaMetrics, Elasticsearch, GitLab, Grafana, GSLB и других эксплуатационных источников, а затем возвращает ответ с доказательствами и явно перечисленными пробелами.</p>
+<p>Сам агент написан на Go, без LangChain и другого agent framework. Go-код хранит состояние диалога, проверяет права и аргументы tools, исполняет план и собирает evidence — подтверждения из конкретных источников. В качестве LLM используются модели с открытыми весами за OpenAI-compatible API: <code>DeepSeek-V4-Flash</code> решает, что проверить следующим, а <code>Qwen3.6-27B-FP8</code> объясняет собранные результаты и подхватывает planning при сбое первой модели. Ни одна модель не ходит в production напрямую.</p>
+<div class="code-block"><div class="code-label">text</div><pre><code class="language-text">вопрос инженера
+      ↓
+Go runtime: scope · policy · memory
+      ↓
+DeepSeek planner → Go executor → local/MCP tools
+      ↓
+Qwen finalizer
+      ↓
+факты · гипотезы · непроверенные источники</code></pre></div>
+<p>Один из диалогов начался с противоречия.</p>
+<p>Внешний Angie записал <code>502</code>. В логах приложения тот же <code>request_id</code> завершился редиректом <code>302</code>. Первый ответ бота выглядел разумно:</p>
+<blockquote><p>На уровне приложения ошибки нет. Запрос успешно обработан, причина, вероятно, находится на внешнем прокси.</p></blockquote>
+<p>Формально всё верно. Практически такой ответ почти бесполезен.</p>
+<p>В коррелированном error log была точная причина: <code>upstream sent too big header while reading response header from upstream</code>. Приложение действительно сформировало корректный redirect, но общий блок response headers не поместился в настроенный buffer Angie. Один только <code>Location</code> занимал 1191 байт. Proxy отбросил ответ upstream и вернул клиенту <code>502</code>.</p>
+<p>Ни endpoints, ни Kubernetes-нода в этом конкретном инциденте не были причиной. В другом реальном эпизоде синхронные <code>502</code> у двух сервисов, наоборот, удалось локализовать до общего failure domain worker-ноды. Одинаковый код ответа потребовал двух разных расследований.</p>
+<p>Проблема агента оказалась не в нехватке инструментов. Инструментов было даже слишком много. Он не умел доказательно связать access, error и application logs, различить «приложение сформировало ответ» и «прокси передал его клиенту», удержать временной scope и выбрать ветку расследования по evidence, а не по знакомому симптому.</p>
+<p>Эта статья — не очередной туториал «подключаем MCP к LLM за час». Она о том, что начинается после первого успешного tool call: о контрактах источников, отрицательных результатах, памяти, которая умеет портить ответы, и evaluation-наборе, без которого качество агента существует только в ощущениях.</p>
+<p>Все имена сервисов, площадок, нод, URL и идентификаторы ниже заменены. Архитектурные решения, классы ошибок и результаты тестов сохранены.</p>
+<h2 id="korotko">Коротко<a class="heading-anchor" href="#korotko" aria-label="Ссылка на раздел «Коротко»">#</a></h2>
+<p>В результате получился read-only агент, который:</p>
+<ul><li>принимает инженерный вопрос обычным русским языком;</li><li>превращает его в typed scope и список того, что требуется доказать;</li><li>выбирает источники по контрактам, а не только по похожести названий;</li><li>хранит большие результаты вне prompt и не теряет середину отчёта;</li><li>различает live-состояние, историческое наблюдение и память треда;</li><li>позволяет команде добавлять read-only skills через n8n и MCP без изменения ядра;</li><li>умеет принимать подтверждённые небольшие знания из треда без fine-tuning;</li><li>проверяется реальной моделью на воспроизводимых результатах production-инструментов.</li></ul>
+<p>В последнем полном прогоне прошли 44 из 45 сценариев, включая 29 из 29 обязательных. Каждый сценарий запускался дважды. Единственный непройденный был optional и касался формальной структуры отчёта по capacity, а не скрытого падения обязательного кейса.</p>
+<p>Это не автономный SRE и не система автоматического remediation. Агент читает, сопоставляет и объясняет. Решения и изменения в production остаются у человека.</p>
+<h2 id="zachem-voobsche-natural-language-v-infrastrukture">Зачем вообще natural language в инфраструктуре<a class="heading-anchor" href="#zachem-voobsche-natural-language-v-infrastrukture" aria-label="Ссылка на раздел «Зачем вообще natural language в инфраструктуре»">#</a></h2>
+<p>Инфраструктурное расследование редко начинается с правильно сформулированного PromQL или имени индекса. Обычно вопрос звучит так:</p>
+<blockquote><p>Почему сервис отдавал 502 в 14:11?</p></blockquote>
+<blockquote><p>Кто вчера выкатывал эту версию и из какой job?</p></blockquote>
+<blockquote><p>Теперь покажи то же самое для другой площадки.</p></blockquote>
+<blockquote><p>Сколько ресурсов уже распланировано по квотам, а сколько реально используется?</p></blockquote>
+<p>За каждым таким вопросом скрывается разный набор систем: Kubernetes, VictoriaMetrics, Elasticsearch, GitLab, Grafana, GSLB, конфигурация внешних прокси, инвентарь виртуализации, реестр работ и история обсуждения в чате.</p>
+<p>Natural language здесь полезен не как красивый способ вызвать один API. Он становится front-end к нескольким системам с разной семантикой. При этом свободный текст нельзя напрямую передавать planner&#39;у. Сначала из него выделяется состояние задачи:</p>
+<div class="code-block"><div class="code-label">text</div><pre><code class="language-text">environment: dc-a
+namespace: payments
+subject: request_trace
+object: service-a
+request_id: 7f9...c21
+time:
+  at: 2026-07-20 14:11 MSK
+  window: ±15m
+mode: historical</code></pre></div>
+<p>Явно заданное в текущем сообщении всегда сильнее памяти. Фраза «теперь в dc-b» должна заменить <code>environment</code>, а слово «сейчас» — удалить старый исторический <code>at</code>.</p>
+<p>Это кажется очевидным, пока бот не показывает пользователю совершенно правдоподобные метрики <code>dc-a</code> в ответе про <code>dc-b</code>.</p>
+<h2 id="pervaya-versiya-tools-est-otveta-vse-ravno-net">Первая версия: tools есть, ответа всё равно нет<a class="heading-anchor" href="#pervaya-versiya-tools-est-otveta-vse-ravno-net" aria-label="Ссылка на раздел «Первая версия: tools есть, ответа всё равно нет»">#</a></h2>
+<p>Первая архитектура была обычным ReAct-циклом:</p>
+<div class="code-block"><div class="code-label">text</div><pre><code class="language-text">user question
+    ↓
+LLM chooses a tool
+    ↓
+tool returns text
+    ↓
+LLM decides whether to call another tool
+    ↓
+final answer</code></pre></div>
+<p>На демо всё выглядело хорошо. Модель находила поды, читала логи и строила таблицы. В реальных диалогах начали повторяться пять классов ошибок.</p>
+<div class="table-wrap"><table><thead><tr><th>Ошибка</th><th>Как выглядела</th><th>Почему опасно</th></tr></thead><tbody><tr><td>Неверный scope</td><td>Второй вопрос менял ЦОД, но ответ наследовал числа первого</td><td>Ответ согласован по тексту, но относится к другому объекту</td></tr><tr><td>Неверная семантика времени</td><td>Последний успешный canary rollout превращался в «canary работает сейчас»</td><td>Объект после rollout уже мог быть удалён</td></tr><tr><td>Неверный отрицательный вывод</td><td>Источник вернул пусто, бот написал «проблем нет»</td><td>Пусто могло означать неподдерживаемый env или ошибку запроса</td></tr><tr><td>Потеря evidence</td><td>Большой пакет обрезался через head/tail</td><td>Из середины исчезал целый ЦОД или результат одного инструмента</td></tr><tr><td>Свободное перепланирование</td><td>На каждом шаге LLM заново решала, что проверять</td><td>Одинаковые вопросы шли по разным цепочкам и давали разные ответы</td></tr></tbody></table></div>
+<p>Была и менее заметная проблема: аргументы tool проверялись синтаксически, но не полностью по schema. Модель могла выбрать правильный инструмент, передать неподдерживаемое поле времени, получить пустой результат и продолжить рассуждать так, будто источник был прочитан.</p>
+<p>Исправлять это новыми фразами в system prompt оказалось бессмысленно. Ограничения, от которых зависит корректность, должны исполняться кодом.</p>
+<h2 id="arhitektura-llm-vnutri-sistemy-a-ne-vokrug-nee">Архитектура: LLM внутри системы, а не вокруг неё<a class="heading-anchor" href="#arhitektura-llm-vnutri-sistemy-a-ne-vokrug-nee" aria-label="Ссылка на раздел «Архитектура: LLM внутри системы, а не вокруг неё»">#</a></h2>
+<p>После нескольких итераций путь запроса стал выглядеть так:</p>
+<div class="code-block"><div class="code-label">text</div><pre><code class="language-text">Mattermost / fallback web chat
+              ↓
+      Context State V2
+ env · namespace · object · time · subject
+              ↓
+ Question and evidence planner
+ objectives · alternatives · stop conditions
+              ↓
+   Tool router and policy gate
+ schema · access · freshness · history
+              ↓
+ Executor + workspace + infra graph
+ parallel calls · full artifacts · relations
+              ↓
+          Finalizer
+ facts · uncertainty · gaps · links</code></pre></div>
+<p>LLM по-прежнему нужна. Она хорошо разбирает неоднозначный вопрос, выбирает стратегию для неизвестного кейса и объясняет собранные факты. Но она больше не определяет:</p>
+<ul><li>какие поля разрешены у инструмента;</li><li>кому доступен tool;</li><li>что означает пустой результат;</li><li>можно ли историческим snapshot подтвердить состояние «сейчас»;</li><li>собрано ли обязательное evidence;</li><li>какой environment считается текущим;</li><li>можно ли сделать отрицательный вывод по частично прочитанному источнику.</li></ul>
+<p>Эти границы принадлежат приложению.</p>
+<figure><a href="assets/article-architecture-anon.png" target="_blank"><img src="assets/article-architecture-anon.png" alt="Обезличенная схема архитектуры агента" width="2160" height="1088" loading="lazy"></a><figcaption>Обезличенная схема архитектуры агента</figcaption></figure>
+<h2 id="kontrakt-instrumenta-vazhnee-ego-opisaniya">Контракт инструмента важнее его описания<a class="heading-anchor" href="#kontrakt-instrumenta-vazhnee-ego-opisaniya" aria-label="Ссылка на раздел «Контракт инструмента важнее его описания»">#</a></h2>
+<p>JSON Schema решает только половину задачи. Она может проверить <code>required</code>, типы, <code>enum</code>, формат времени и неизвестные поля. Но из обычной schema агент не узнает:</p>
+<ul><li>это live-источник или история;</li><li>какой timestamp считать временем наблюдения;</li><li>достаточно ли пустого результата для вывода «ничего не найдено»;</li><li>может ли инструмент подтвердить отсутствие объекта;</li><li>какие evidence-objectives он закрывает;</li><li>read-only ли он на самом деле.</li></ul>
+<p>Поэтому к MCP-tool добавился эксплуатационный контракт <code>x-agent</code>.</p>
+<div class="code-block"><div class="code-label">json</div><pre><code class="language-json">{
+  &quot;type&quot;: &quot;object&quot;,
+  &quot;required&quot;: [&quot;env&quot;, &quot;namespace&quot;, &quot;workload&quot;],
+  &quot;additionalProperties&quot;: false,
+  &quot;properties&quot;: {
+    &quot;env&quot;: {
+      &quot;type&quot;: &quot;string&quot;,
+      &quot;enum&quot;: [&quot;dc-a&quot;, &quot;dc-b&quot;, &quot;stage&quot;]
+    },
+    &quot;namespace&quot;: {&quot;type&quot;: &quot;string&quot;},
+    &quot;workload&quot;: {&quot;type&quot;: &quot;string&quot;}
+  },
+  &quot;x-agent&quot;: {
+    &quot;evidence&quot;: [&quot;k8s.pod_status&quot;],
+    &quot;sources&quot;: [&quot;kube-state-metrics&quot;],
+    &quot;output_kind&quot;: &quot;workload_status&quot;,
+    &quot;freshness&quot;: &quot;observed_at from source&quot;,
+    &quot;negative_semantics&quot;: &quot;empty means no matches only in queried scope&quot;,
+    &quot;supports_history&quot;: false,
+    &quot;current_only&quot;: true,
+    &quot;read_only&quot;: true,
+    &quot;admin_only&quot;: false
+  }
+}</code></pre></div>
+<p>Особенно важен <code>negative_semantics</code>. Положительный факт обычно прост: источник вернул pod в <code>CrashLoopBackOff</code>. С отрицательным всё сложнее. «Строк не найдено» может означать:</p>
+<ol><li>событий действительно не было в заданном окне;</li><li>неверно выбран индекс;</li><li>площадка не поддерживается;</li><li>источник вернул только первые 300 строк;</li><li>запрос упал, но workflow завернул ошибку в пустой массив.</li></ol>
+<p>Без явной семантики агент почти неизбежно начнёт путать отсутствие доказательства с доказательством отсутствия.</p>
+<p>Результат инструмента тоже нормализуется:</p>
+<div class="code-block"><div class="code-label">json</div><pre><code class="language-json">{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;scope&quot;: {
+    &quot;env&quot;: &quot;dc-a&quot;,
+    &quot;namespace&quot;: &quot;payments&quot;,
+    &quot;object&quot;: &quot;service-a&quot;
+  },
+  &quot;observed_at&quot;: &quot;2026-07-20T14:12:03+03:00&quot;,
+  &quot;entities&quot;: [],
+  &quot;relations&quot;: [],
+  &quot;coverage&quot;: {
+    &quot;source&quot;: &quot;kube-state-metrics&quot;,
+    &quot;complete_for_negative&quot;: true
+  },
+  &quot;facts&quot;: [],
+  &quot;warnings&quot;: []
+}</code></pre></div>
+<p>Capability говорит, что tool в принципе умеет искать. Только runtime coverage говорит, что нужный источник действительно был прочитан достаточно полно.</p>
+<h2 id="planirovat-nuzhno-voprosy-a-ne-nazvaniya-tools">Планировать нужно вопросы, а не названия tools<a class="heading-anchor" href="#planirovat-nuzhno-voprosy-a-ne-nazvaniya-tools" aria-label="Ссылка на раздел «Планировать нужно вопросы, а не названия tools»">#</a></h2>
+<p>Свободный ReAct-цикл каждый раз начинал расследование заново. Forced route улучшал повторяемость, но мог заменить собой весь план. В итоге известный инструмент вызывался стабильно, а вопрос оставался закрыт лишь частично.</p>
+<p>Теперь planner сначала строит objectives:</p>
+<div class="code-block"><div class="code-label">yaml</div><pre><code class="language-yaml">question: &quot;почему сервис отдавал 502?&quot;
+
+objectives:
+  - symptom.http_502
+  - route.edge_to_ingress
+  - route.ingress_to_service
+  - k8s.ready_endpoints
+  - backend.failure_domain
+  - node.network_health
+  - changes.before_incident
+
+causality:
+  - later_event_cannot_explain_earlier_symptom
+  - weak_signal_requires_time_and_peer_correlation
+
+stop:
+  - every_required_objective_is_resolved_or_explicitly_unavailable</code></pre></div>
+<p>У objective может быть несколько допустимых источников. Статус workload можно получить специализированным Kubernetes-tool или composite workflow. Ошибки 5xx — из ingress metrics или access logs. Planner выбирает доступный источник, но не имеет права объявить весь objective закрытым только потому, что один удобный tool вернул <code>ok</code>.</p>
+<p>Evidence guard блокирует преждевременный final. При этом он не заставляет агента бесконечно повторять неработающий вызов: после подтверждённой ошибки источник помечается unavailable, а пробел попадает в ответ.</p>
+<h2 id="kak-ne-pokazat-modeli-ves-katalog-srazu">Как не показать модели весь каталог сразу<a class="heading-anchor" href="#kak-ne-pokazat-modeli-ves-katalog-srazu" aria-label="Ссылка на раздел «Как не показать модели весь каталог сразу»">#</a></h2>
+<p>Даже хороший контракт бесполезен, если в prompt одновременно загрузить десятки больших schemas. Модель начинает путать похожие инструменты, а полезный контекст вытесняется описанием API.</p>
+<p>Каталог проходит несколько ступеней:</p>
+<div class="code-block"><div class="code-label">text</div><pre><code class="language-text">all discovered tools
+        ↓ policy and contract admission
+allowed read-only tools
+        ↓ lexical prefilter
+up to 30 candidates
+        ↓ LLM rerank
+top 8 for the current question
+        ↓ objective relevance gate
+tools allowed for the unresolved objective</code></pre></div>
+<p>Для известных рискованных intents есть deterministic pre-route: точный alert URL, <code>request_id</code>, стоимость workload или live status не зависят от удачи ранкера. Для неизвестного вопроса остаётся свободный planner. Если LLM-rerank завершается timeout или невалидным JSON, используется lexical fallback.</p>
+<p>Так ранкер ускоряет первый шаг, но не подменяет question plan. Tool с высоким score всё равно не вызывается, если не закрывает ни одного текущего objective.</p>
+<p>Инфраструктурный путь при этом хранится как частичный граф, а не одна обязательная цепочка. В одном периметре вход начинается с GSLB, в другом — с внешнего прокси; между Service и workload может быть Canary, а PVE есть не у каждого кластера. <code>Observed relation</code> является фактом с source и <code>observed_at</code>, <code>inferred relation</code> — только направлением следующей проверки.</p>
+<h2 id="bolshie-rezultaty-ne-dolzhny-zhit-v-prompt">Большие результаты не должны жить в prompt<a class="heading-anchor" href="#bolshie-rezultaty-ne-dolzhny-zhit-v-prompt" aria-label="Ссылка на раздел «Большие результаты не должны жить в prompt»">#</a></h2>
+<p>Логи и инфраструктурные таблицы легко занимают десятки и сотни килобайт. Если каждый результат целиком добавлять в историю, модель начинает хуже видеть текущую задачу. Если просто обрезать общий пакет, исчезают целые наблюдения.</p>
+<p>Я разделил данные на два слоя:</p>
+<ul><li><strong>workspace</strong> хранит полный результат внутри текущего turn;</li><li><strong>evidence packet</strong> получает компактное структурированное представление каждого наблюдения.</li></ul>
+<p>Модель может адресно спросить workspace: найти строки по <code>request_id</code>, показать определённый временной кусок или извлечь конкретную таблицу. Финальный budget распределяется между источниками, поэтому десятый вызов не выталкивает пятый только из-за своего размера.</p>
+<p>Полный raw не становится долговременной памятью. После turn он больше не нужен, а чувствительные данные не должны бесконтрольно накапливаться.</p>
+<h2 id="razbor-togo-samogo-502">Разбор того самого 502<a class="heading-anchor" href="#razbor-togo-samogo-502" aria-label="Ссылка на раздел «Разбор того самого 502»">#</a></h2>
+<p>Вернёмся к исходному инциденту.</p>
+<h3 id="1-simptom">1. Симптом<a class="heading-anchor" href="#1-simptom" aria-label="Ссылка на раздел «1. Симптом»">#</a></h3>
+<p>Access log внешнего прокси показывал:</p>
+<div class="code-block"><div class="code-label">text</div><pre><code class="language-text">status=502
+upstream_status=502
+request_id=7f9...c21
+upstream=&lt;ingress-vip&gt;:443</code></pre></div>
+<p>В приложении тот же идентификатор завершался redirect&#39;ом:</p>
+<div class="code-block"><div class="code-label">text</div><pre><code class="language-text">status=302
+duration=230ms</code></pre></div>
+<p>Это не противоречие. Лог handler&#39;а доказывает, что приложение сформировало ответ. Он не доказывает, что proxy смог прочитать и передать весь ответ клиенту.</p>
+<h3 id="2-tochnyy-error-log-a-ne-obschiy-obzor-5xx">2. Точный error log, а не общий обзор 5xx<a class="heading-anchor" href="#2-tochnyy-error-log-a-ne-obschiy-obzor-5xx" aria-label="Ссылка на раздел «2. Точный error log, а не общий обзор 5xx»">#</a></h3>
+<p>Поиск только по <code>request_id</code> нашёл access-строку, но не объяснил расхождение. Error log не содержал <code>request_id</code>, поэтому записи пришлось коррелировать по:</p>
+<ul><li>идентификатору соединения Angie;</li><li>тому же host и path;</li><li>узкому временному окну около 2,5 секунды.</li></ul>
+<p>В коррелированной строке было:</p>
+<div class="code-block"><div class="code-label">text</div><pre><code class="language-text">upstream sent too big header while reading response header from upstream</code></pre></div>
+<p>После этого <code>502</code> перестал быть общей «проблемой между proxy и backend». Angie установил соединение и начал читать ответ, но не смог разместить response headers в настроенном буфере.</p>
+<h3 id="3-chto-imenno-okazalos-bolshim">3. Что именно оказалось большим<a class="heading-anchor" href="#3-chto-imenno-okazalos-bolshim" aria-label="Ссылка на раздел «3. Что именно оказалось большим»">#</a></h3>
+<p>Access log сохранял <code>upstream_redirect_location</code>. После удаления query-параметров из отчёта агент показал безопасную часть URL и размер полного значения: 1191 байт. В отдельном воспроизведении ответ также содержал длинный <code>Content-Security-Policy</code> и много повторяющихся <code>X-Frame-Options</code>.</p>
+<div class="code-block"><div class="code-label">text</div><pre><code class="language-text">Content-Security-Policy: frame-ancestors &lt;длинный список доменов&gt;
+Location: https://example/.../&lt;signed-path&gt;?&lt;long-query&gt;
+X-Frame-Options: ALLOW-FROM &lt;domain-a&gt;
+X-Frame-Options: ALLOW-FROM &lt;domain-b&gt;
+...</code></pre></div>
+<p>Один длинный <code>Location</code> ещё не доказывает, что лимит превысил именно он: в общий блок входят status line, <code>Location</code>, <code>Set-Cookie</code> и остальные response headers. Но вместе с точным сообщением Angie этого достаточно для диагноза класса <code>response_headers_too_large</code>.</p>
+<p>Правильный вывод получился таким:</p>
+<blockquote><p>Приложение завершило запрос с HTTP 302, но Angie вернул клиенту 502. В error log для того же соединения подтверждено <code>upstream sent too big header</code>. Причина находится в размере response headers, а не в отсутствии endpoints.</p></blockquote>
+<p>И действие тоже должно быть ограниченным: сначала посмотреть полный набор заголовков и убрать избыточный <code>Location</code> или <code>Set-Cookie</code>; <code>proxy_buffer_size</code> увеличивать только после оценки реального размера ответов и цены изменения для всего потока.</p>
+<h3 id="4-pochemu-pervyy-otvet-byl-opasen">4. Почему первый ответ был опасен<a class="heading-anchor" href="#4-pochemu-pervyy-otvet-byl-opasen" aria-label="Ссылка на раздел «4. Почему первый ответ был опасен»">#</a></h3>
+<p>Фраза «приложение ответило успешно» легко превращается в ложный вывод «приложение ни при чём». Но приложение контролирует и код, и заголовки ответа. На границе proxy корректный для handler&#39;а результат может стать ошибкой протокольной доставки.</p>
+<p>Ещё хуже было бы автоматически запустить общий flow по endpoints, pod health и node metrics. Он собрал бы много правдивых данных, но не приблизил бы расследование к причине.</p>
+<p>Для точного <code>request_id</code> появился отдельный вход:</p>
+<div class="code-block"><div class="code-label">text</div><pre><code class="language-text">access log внешнего прокси по request_id
+        ↓
+same connection + host + path + narrow time
+        ↓
+error log внешнего прокси
+        ↓
+application completion log
+        ↓
+classified mismatch and bounded recommendation</code></pre></div>
+<p>Workflow классифицирует не только <code>too big header</code>, но и timeout, reset, connection refused, premature close, invalid header и upstream TLS. Если error log не найден, он не выдаёт предполагаемую причину за установленную.</p>
+<figure><a href="assets/eval-request-header-anon.png" target="_blank"><img src="assets/eval-request-header-anon.png" alt="Evaluation-сценарий расхождения редиректа приложения и 502 на внешнем прокси" width="1600" height="1000" loading="lazy"></a><figcaption>Evaluation-сценарий расхождения редиректа приложения и 502 на внешнем прокси</figcaption></figure>
+<h2 id="tot-zhe-502-drugaya-prichina">Тот же 502, другая причина<a class="heading-anchor" href="#tot-zhe-502-drugaya-prichina" aria-label="Ссылка на раздел «Тот же 502, другая причина»">#</a></h2>
+<p>Отдельный инцидент начался без точного <code>request_id</code>: одновременно выросли <code>502</code> у двух независимых workload. У них не было общей бизнес-логики, зато pods жили на одном node pool.</p>
+<p>На одной worker-ноде в проблемных окнах повторялись softnet squeezes и TCP retransmits, а peer-ноды были чистыми. Инвентарь связал Kubernetes node с VM и физическим hypervisor.</p>
+<div class="code-block"><div class="code-label">text</div><pre><code class="language-text">service-a ─┐
+           ├─→ worker-04 → VM-481 → hypervisor-04
+service-b ─┘</code></pre></div>
+<p>Здесь сильным evidence стала не отдельная метрика, а сочетание временной корреляции, peer comparison и второго независимого сервиса. Даже после этого агент не называл конкретную настройку <code>virtio</code>, IRQ/RPS или <code>sysctl</code>: для неё не было отдельного доказательства.</p>
+<p>Два кейса важны вместе. <code>502</code> — это симптом, а не готовый план. Точный <code>request_id</code> ведёт сначала в коррелированные access/error logs; массовый синхронный всплеск требует сравнения сервисов, endpoints и failure domains.</p>
+<figure><a href="assets/eval-502-anon.png" target="_blank"><img src="assets/eval-502-anon.png" alt="Evaluation-сценарий локализации 502 до worker-ноды и VM" width="1600" height="1600" loading="lazy"></a><figcaption>Evaluation-сценарий локализации 502 до worker-ноды и VM</figcaption></figure>
+<h2 id="vtoroy-korotkiy-keys-kto-imenno-deploil">Второй короткий кейс: кто именно деплоил<a class="heading-anchor" href="#vtoroy-korotkiy-keys-kto-imenno-deploil" aria-label="Ссылка на раздел «Второй короткий кейс: кто именно деплоил»">#</a></h2>
+<p>Другой показательный вопрос звучал проще:</p>
+<blockquote><p>Кто вчера выкатывал service-c в dc-b?</p></blockquote>
+<p>В первой версии агент нашёл GitLab job, Kubernetes audit и commit, после чего объединил всё в одну фразу: «сервис деплоил пользователь X». В ответ попало даже восстановленное по username имя, которого ни один источник не возвращал.</p>
+<p>На самом деле это разные роли:</p>
+<ul><li><code>job.user</code> — кто запустил pipeline или job;</li><li>commit author — кто создал изменение;</li><li>Kubernetes audit actor — какой пользователь или ServiceAccount изменил объект;</li><li>отдельная ручная операция — например, удаление Deployment между двумя CI-релизами.</li></ul>
+<p>Они могут совпасть, но это нужно доказать, а не предположить.</p>
+<p>После исправления release timeline строится из отдельных событий. Для каждой job сохраняются status, ref, image tag, commit, pipeline и кликабельная ссылка. Ручное audit-действие показывается отдельной строкой и не исчезает из-за того, что рядом есть более красивая история CI/CD.</p>
+<figure><a href="assets/eval-release-anon.png" target="_blank"><img src="assets/eval-release-anon.png" alt="Evaluation связывания GitLab job, Kubernetes audit и ручного действия" width="1600" height="1600" loading="lazy"></a><figcaption>Evaluation связывания GitLab job, Kubernetes audit и ручного действия</figcaption></figure>
+<h2 id="pamyat-tri-mehanizma-vmesto-odnogo">Память: три механизма вместо одного<a class="heading-anchor" href="#pamyat-tri-mehanizma-vmesto-odnogo" aria-label="Ссылка на раздел «Память: три механизма вместо одного»">#</a></h2>
+<p>Слово «память» оказалось слишком общим. В системе есть три разных слоя.</p>
+<h3 id="kontekst-treda">Контекст треда<a class="heading-anchor" href="#kontekst-treda" aria-label="Ссылка на раздел «Контекст треда»">#</a></h3>
+<p>Mattermost остаётся source of truth для самой переписки. При mention в существующем обсуждении бот заново читает сообщения этого треда. Предыдущий ответ ассистента помечается как context, но не как live evidence.</p>
+<h3 id="korotkaya-rabochaya-pamyat">Короткая рабочая память<a class="heading-anchor" href="#korotkaya-rabochaya-pamyat" aria-label="Ссылка на раздел «Короткая рабочая память»">#</a></h3>
+<p>Она process-local, живёт 90 минут, хранит не более 20 записей и ограничена 12 КБ в prompt. Ключ — <code>channel/root</code>, поэтому разные треды внутри личного канала не смешиваются.</p>
+<p>У наблюдения есть:</p>
+<ul><li><code>observed_at</code>;</li><li>freshness;</li><li>признак historical;</li><li>scope;</li><li>subject.</li></ul>
+<p>Память добавляется только для релевантного follow-up. Новый явно заданный scope её переопределяет.</p>
+<p>После рестарта pod этот слой исчезает. Это допустимо: скрытые результаты tools не должны превращаться в вечную истину.</p>
+<h3 id="podtverzhdennoe-operational-knowledge">Подтверждённое operational knowledge<a class="heading-anchor" href="#podtverzhdennoe-operational-knowledge" aria-label="Ссылка на раздел «Подтверждённое operational knowledge»">#</a></h3>
+<p>Иногда в треде появляется небольшое, но важное знание: тариф, особенность архитектуры, ссылка на runbook, исключение для конкретного периметра.</p>
+<p>Администратор может написать в существующем треде «запомни это». Точное совпадение фразы не требуется. Бот:</p>
+<ol><li>читает человеческие сообщения треда;</li><li>берёт только ссылки на разрешённые внутренние Wiki, GitLab и tracker;</li><li>готовит короткий draft;</li><li>удаляет секретоподобные данные;</li><li>отделяет исправление человека от старого ответа бота;</li><li>сохраняет запись только после подтверждения.</li></ol>
+<p>Запись содержит автора, источник, время, scope и hash содержимого. Это не fine-tuning и не незаметное переписывание system prompt. Это контролируемое runtime-знание с происхождением.</p>
+<h2 id="komanda-dobavlyaet-skills-bez-reliza-yadra">Команда добавляет skills без релиза ядра<a class="heading-anchor" href="#komanda-dobavlyaet-skills-bez-reliza-yadra" aria-label="Ссылка на раздел «Команда добавляет skills без релиза ядра»">#</a></h2>
+<p>Второй контур развития агента — новые возможности.</p>
+<p>Команда уже использовала n8n для инфраструктурных workflow. Вместо того чтобы заставлять каждого автора править код бота, n8n стал одним из MCP-серверов:</p>
+<div class="code-block"><div class="code-label">text</div><pre><code class="language-text">n8n workflow
+    ↓
+input schema + x-agent
+    ↓
+MCP tools/list
+    ↓
+trusted-source and policy checks
+    ↓
+agent catalog</code></pre></div>
+<p>Workflow с нужными тегами публикуется как MCP-tool. Входы Execute Workflow Trigger превращаются в JSON Schema, а <code>x-agent</code> переносит эксплуатационную семантику.</p>
+<p>Для нового командного read-only skill не нужен очередной <code>if toolName == ...</code>:</p>
+<ul><li><code>read_only=true, admin_only=false</code> — доступ всем пользователям;</li><li><code>admin_only=true</code> — только администраторам;</li><li>нет явного <code>read_only=true</code> — fail closed;</li><li>mutating tool не появляется в read-only режиме.</li></ul>
+<p>Каталог обновляется динамически. Если MCP временно недоступен, агент видит health конкретного источника и может использовать последний безопасно загруженный catalog, не смешивая его с runtime evidence.</p>
+<p>MCP здесь решает задачу интеграции и командного ownership. Он не решает planning, безопасность и качество автоматически. Исследование <a href="https://arxiv.org/abs/2510.19286" target="_blank" rel="noreferrer noopener">TheMCPCompany</a> на более чем 18 тысячах tools показывает похожую границу: доступ к task-specific tools полезен, но сложная навигация по enterprise-каталогу остаётся трудной даже для сильных моделей.</p>
+<h2 id="pochemu-ya-ne-dobavil-langchain-i-vector-db">Почему я не добавил LangChain и vector DB<a class="heading-anchor" href="#pochemu-ya-ne-dobavil-langchain-i-vector-db" aria-label="Ссылка на раздел «Почему я не добавил LangChain и vector DB»">#</a></h2>
+<p>Не потому, что они плохие. В текущей задаче не появилось измеримого преимущества, которое окупило бы ещё один stateful слой.</p>
+<p>Основные запросы агента относятся к live-данным:</p>
+<div class="table-wrap"><table><thead><tr><th>Тип вопроса</th><th>Лучший текущий путь</th></tr></thead><tbody><tr><td>Метрики, логи, audit, status</td><td>Прямой tool к источнику с временным scope</td></tr><tr><td><code>request_id</code>, hostname, job ID, commit SHA</td><td>Точный structured/lexical search</td></tr><tr><td>Небольшие operator rules</td><td>Версионируемый ConfigMap</td></tr><tr><td>Подтверждённые знания тредов</td><td>Mattermost source of truth + JSONL cache + in-memory index</td></tr><tr><td>Перефразированный knowledge-вопрос</td><td>LLM query expansion, optional rerank</td></tr></tbody></table></div>
+<p>Vector search не сделает метрику свежее и не исправит неверный временной диапазон. Для точного идентификатора семантическая близость может быть даже вредна.</p>
+<p>Отдельной прикладной БД у агента тоже нет:</p>
+<ul><li>состояние алертов восстанавливается из Grafana и Mattermost;</li><li>ops-kb хранится в ConfigMap;</li><li>одобренная база знаний восстанавливается из канала и локального JSONL cache;</li><li>turn workspace и короткая память живут в процессе.</li></ul>
+<p>Это осознанный компромисс, а не универсальная рекомендация.</p>
+<p>Есть важная оговорка: текущий evaluation намеренно отключает KB retrieval, чтобы не обращаться к живым Mattermost/KB-источникам. Поэтому результат 44/45 доказывает работу planner, contracts, context и tool orchestration, но <strong>не доказывает</strong>, что lexical retrieval равен или лучше embeddings.</p>
+<p>Правильный следующий эксперимент:</p>
+<ol><li>собрать 80–150 реальных вопросов к знаниям;</li><li>назначить gold entries;</li><li>сравнить lexical, lexical + query expansion, vector и hybrid;</li><li>измерить <code>recall@3</code>, <code>precision@3</code>, false-context injection и latency;</li><li>добавить vector layer только при подтверждённом выигрыше.</li></ol>
+<p>В документации <a href="https://docs.langchain.com/oss/python/langchain/retrieval" target="_blank" rel="noreferrer noopener">LangChain по retrieval</a> существующую базу знаний тоже можно подключать напрямую как tool. Необязательно сначала переносить всё в новый vector store.</p>
+<h2 id="evaluation-vmesto-vrode-stalo-luchshe">Evaluation вместо «вроде стало лучше»<a class="heading-anchor" href="#evaluation-vmesto-vrode-stalo-luchshe" aria-label="Ссылка на раздел «Evaluation вместо «вроде стало лучше»»">#</a></h2>
+<p>Unit-тесты проверяют функции. Они не отвечают на вопросы:</p>
+<ul><li>выберет ли модель нужный tool;</li><li>сохранит ли environment из follow-up;</li><li>не объявит ли источник чистым после timeout;</li><li>не потеряет ли ручное audit-действие в красивой таблице релизов;</li><li>повторит ли результат второй запуск.</li></ul>
+<p>Каждый неприятный production-диалог превращается в scenario fixture:</p>
+<div class="code-block"><div class="code-label">yaml</div><pre><code class="language-yaml">id: context-env-switch-host-metrics
+required: true
+runs: 2
+
+thread:
+  - user: &quot;покажи средний трафик в dc-a&quot;
+  - assistant: &quot;...&quot;
+  - user: &quot;проверь то же самое в dc-b&quot;
+
+expect:
+  tools:
+    - node_metrics(env=dc-b)
+  answer_contains:
+    - &quot;dc-b&quot;
+  answer_not_contains:
+    - stale_value_from_dc_a</code></pre></div>
+<p>Harness использует:</p>
+<ul><li>реальную planner/finalizer-модель;</li><li>replay результатов tools;</li><li>те же production schemas и <code>x-agent</code>;</li><li>обязательные и optional scenarios;</li><li>positive и negative assertions;</li><li>несколько запусков каждого сценария.</li></ul>
+<p>Последний полный отчёт:</p>
+<div class="table-wrap"><table><thead><tr><th>Метрика</th><th>Результат</th></tr></thead><tbody><tr><td>Сценариев</td><td>45</td></tr><tr><td>Завершено</td><td>45</td></tr><tr><td>Прошло</td><td>44</td></tr><tr><td>Обязательные</td><td>29/29</td></tr><tr><td>Запусков каждого</td><td>2</td></tr><tr><td>Режим</td><td>real-model / replay-tools</td></tr><tr><td>Источник контрактов</td><td>загруженный MCP catalog</td></tr></tbody></table></div>
+<figure><a href="assets/eval-overview-anon.png" target="_blank"><img src="assets/eval-overview-anon.png" alt="Обезличенная сводка evaluation" width="1600" height="1600" loading="lazy"></a><figcaption>Обезличенная сводка evaluation</figcaption></figure>
+<p>Единственный optional failure оставлен в отчёте. Оба запуска содержали правильные числа, но не прошли assertion структуры capacity-ответа. Скрыть его и написать 45/45 было бы проще, но тогда сам evaluation превратился бы в декорацию.</p>
+<p>Точный request trace с большим header занимал 8,49 и 8,08 секунды. Отдельный backend-node 502-кейс — 4,38 и 4,16 секунды. Для цепочки GitLab job → Kubernetes audit → FailedMount понадобилось 9,65 и 8,25 секунды. Это не означает «агент быстрее инженера в N раз»: ручной baseline на том же наборе данных не измерялся, а latency живых источников в replay отсутствует.</p>
+<p>Подтверждённый результат скромнее, но полезнее: несколько систем сведены в один natural-language запрос, а качество ответа можно сравнивать между версиями.</p>
+<h2 id="kak-zdes-vyglyadel-vaybkoding">Как здесь выглядел вайбкодинг<a class="heading-anchor" href="#kak-zdes-vyglyadel-vaybkoding" aria-label="Ссылка на раздел «Как здесь выглядел вайбкодинг»">#</a></h2>
+<p>Большая часть кода действительно создавалась в плотном диалоге с coding agent. Но рабочая единица процесса была не «промпт → готовая фича».</p>
+<p>Она выглядела так:</p>
+<div class="code-block"><div class="code-label">text</div><pre><code class="language-text">плохой production-ответ
+    ↓
+класс ошибки
+    ↓
+инвариант
+    ↓
+минимальная точка изменения
+    ↓
+patch + unit tests
+    ↓
+real-model eval
+    ↓
+повторный production-кейс</code></pre></div>
+<p>Например:</p>
+<ul><li>«бот взял числа прошлого ЦОДа» превратилось в правило <code>explicit current scope &gt; memory</code>;</li><li>«успешный rollout назван текущим статусом» — в разделение historical/current-only;</li><li>«из середины пропал один источник» — в workspace и распределённый evidence budget;</li><li>«новый n8n skill не виден» — в декларативный admission по <code>x-agent</code>, а не hardcoded whitelist;</li><li>«ответ про релиз потерял ручное удаление Deployment» — в отдельные сущности GitLab job, commit author и Kubernetes audit actor.</li></ul>
+<p>AI хорошо ускорял поиск связанного кода, генерацию fixtures, механические изменения, HTML-отчёты и локальные тесты. Модель отказов, trust boundaries, семантика источников и критерий достаточного evidence появлялись из разбора реальных ошибок.</p>
+<p>Главный эффект вайбкодинга здесь — не автономная разработка. Он сделал итерации дешевле, поэтому редкий неприятный кейс стало рационально превращать в общее правило и regression scenario, а не оставлять заметкой «поправить потом».</p>
+<h2 id="read-only-tozhe-trebuet-modeli-ugroz">Read-only тоже требует модели угроз<a class="heading-anchor" href="#read-only-tozhe-trebuet-modeli-ugroz" aria-label="Ссылка на раздел «Read-only тоже требует модели угроз»">#</a></h2>
+<p>Агент не меняет production, но это не делает его автоматически безопасным.</p>
+<h3 id="prompt-injection">Prompt injection<a class="heading-anchor" href="#prompt-injection" aria-label="Ссылка на раздел «Prompt injection»">#</a></h3>
+<p>Tool descriptions, Wiki, логи и результаты MCP считаются недоверенными данными. Фраза внутри лога не может изменить роль агента или расширить права.</p>
+<h3 id="access-policy">Access policy<a class="heading-anchor" href="#access-policy" aria-label="Ссылка на раздел «Access policy»">#</a></h3>
+<p>Авторизацию принимает код. Нельзя сделать tool публичным, просто написав в его description «безопасный». Учитываются trusted source, contract metadata, режим агента и роль пользователя.</p>
+<h3 id="ssrf-i-network-checker">SSRF и network checker<a class="heading-anchor" href="#ssrf-i-network-checker" aria-label="Ссылка на раздел «SSRF и network checker»">#</a></h3>
+<p>Одиночный public host/IP можно проверять на любом порту. CIDR и массовый перебор доступны только администраторам. После DNS resolution проверяются все IP отдельно, а не только первый удобный адрес.</p>
+<h3 id="redaction">Redaction<a class="heading-anchor" href="#redaction" aria-label="Ссылка на раздел «Redaction»">#</a></h3>
+<p>Секретоподобные строки, request body, query parameters и чувствительные фрагменты удаляются до evidence packet, отчёта и вложений.</p>
+<h3 id="degradaciya">Деградация<a class="heading-anchor" href="#degradaciya" aria-label="Ссылка на раздел «Деградация»">#</a></h3>
+<p>Если модель не успела завершить turn, отдельный synthesis budget формирует ответ из уже подтверждённых observations и перечисляет пробелы. Timeout не должен стирать собранные факты или провоцировать выдуманный «успех».</p>
+<h2 id="chto-v-itoge-poluchilos-a-chto-esche-net">Что в итоге получилось, а что ещё нет<a class="heading-anchor" href="#chto-v-itoge-poluchilos-a-chto-esche-net" aria-label="Ссылка на раздел «Что в итоге получилось, а что ещё нет»">#</a></h2>
+<p>Получился не универсальный автономный агент, а узкий operational interface:</p>
+<ul><li>один runtime для корпоративного чата и резервного web UI;</li><li>десятки read-only источников с динамическим MCP catalog;</li><li>typed context и частичный граф инфраструктуры;</li><li>детерминированные пути для известных рискованных intents;</li><li>свободное планирование там, где заранее заданного workflow нет;</li><li>короткая память треда и отдельно подтверждаемое operational knowledge;</li><li>real-model evaluation как release gate.</li></ul>
+<p>Не получилось — или пока не доказано:</p>
+<ul><li>автоматическое remediation;</li><li>packet-level root cause для каждого сетевого инцидента;</li><li>универсальный граф всей инфраструктуры;</li><li>преимущество текущего knowledge retrieval над vector/hybrid;</li><li>ускорение ручного расследования в N раз;</li><li>стопроцентная повторяемость свободного planner.</li></ul>
+<p>И это нормальная граница. В production полезнее агент, который точно показывает покрытие и пробелы, чем агент, который всегда заканчивает ответ уверенным выводом.</p>
+<h2 id="chto-mozhno-povtorit-bez-kopirovaniya-vsey-sistemy">Что можно повторить без копирования всей системы<a class="heading-anchor" href="#chto-mozhno-povtorit-bez-kopirovaniya-vsey-sistemy" aria-label="Ссылка на раздел «Что можно повторить без копирования всей системы»">#</a></h2>
+<p>Если начинать подобный проект с нуля, я бы не подключал сразу все источники. Минимальный практический путь выглядит так:</p>
+<ol><li><strong>Собрать 10–20 реальных вопросов и плохих ответов.</strong> Не synthetic demo, а случаи, где неверный вывод действительно мешал инженеру.</li><li><strong>Описать typed scope.</strong> Environment, object, namespace, time и subject должны существовать отдельно от истории диалога.</li><li><strong>Выбрать один read-only сценарий.</strong> Например, workload startup или точный request trace.</li><li><strong>Добавить schema и negative semantics.</strong> Особенно определить, когда <code>empty</code> разрешает отрицательный вывод.</li><li><strong>Разделить raw и evidence.</strong> Полный результат хранить отдельно, модели давать компактное наблюдение и адресный доступ.</li><li><strong>Записать stop condition.</strong> Что требуется доказать до final и что считать корректно недоступным.</li><li><strong>Сделать replay fixture.</strong> Зафиксировать результаты tools и запускать настоящую модель хотя бы дважды.</li><li><strong>Добавлять память только после scope.</strong> Иначе она закрепит первые ошибки быстрее, чем поможет follow-up.</li><li><strong>Подключать новые tools декларативно и fail closed.</strong> Description не является политикой доступа.</li><li><strong>Не добавлять vector DB без retrieval benchmark.</strong> Сначала измерить реальные пропуски.</li></ol>
+<p>Так уже появляется проверяемая система. RLM, граф инфраструктуры, HTML-отчёты и дополнительные модели можно добавлять позже, когда конкретный failure mode оправдает сложность.</p>
+<h2 id="vyvody-kotorye-ya-zabral-iz-etoy-raboty">Выводы, которые я забрал из этой работы<a class="heading-anchor" href="#vyvody-kotorye-ya-zabral-iz-etoy-raboty" aria-label="Ссылка на раздел «Выводы, которые я забрал из этой работы»">#</a></h2>
+<ol><li><strong>Tool calling — начало, а не архитектура.</strong> MCP стандартизирует вызов, но не решает planning, access и evidence semantics.</li><li><strong>Natural language должен заканчиваться typed state.</strong> Иначе follow-up неизбежно начнёт смешивать объекты, время и площадки.</li><li><strong>Пустой результат требует контракта.</strong> У отрицательного вывода должен быть scope и подтверждённое coverage.</li><li><strong>Память не является evidence.</strong> Особенно когда пользователь спрашивает «сейчас».</li><li><strong>Планировать нужно доказательства.</strong> Название tool — лишь один из способов закрыть objective.</li><li><strong>Большой raw лучше хранить вне prompt.</strong> Модель должна получать адресный доступ, а не случайный head/tail.</li><li><strong>Новый skill должен подключаться декларативно и fail closed.</strong> Иначе командная расширяемость быстро превращается в новый hardcoded whitelist.</li><li><strong>Evaluation — часть продукта.</strong> Один удачный ответ ничего не говорит о повторяемости.</li><li><strong>Не каждая система нуждается в vector DB и агентском фреймворке.</strong> Сначала нужен benchmark, затем дополнительный слой.</li><li><strong>Вайбкодинг снижает стоимость итерации, но не выбирает правильные инварианты.</strong></li></ol>
+<p>Хороший инфраструктурный агент не обязан знать ответ заранее. Он должен понимать, что именно требуется доказать, уметь дойти до доступных источников и не скрывать границу между фактом, гипотезой и пробелом.</p>
+<p>Именно эта граница оказалась самой большой частью работы.</p>
+<p>Если у вас агент уже умеет вызывать инструменты, но путает время, scope или правдоподобную гипотезу с доказанной причиной, мне интересны такие задачи. Связаться со мной можно через профиль Хабра.</p>
+<hr>
+<h2 id="materialy">Материалы<a class="heading-anchor" href="#materialy" aria-label="Ссылка на раздел «Материалы»">#</a></h2>
+<ul><li><a href="https://modelcontextprotocol.io/docs/learn/server-concepts" target="_blank" rel="noreferrer noopener">Model Context Protocol: server concepts</a></li><li><a href="https://www.anthropic.com/engineering/building-effective-agents" target="_blank" rel="noreferrer noopener">Anthropic: Building effective agents</a></li><li><a href="https://arxiv.org/abs/2510.19286" target="_blank" rel="noreferrer noopener">TheMCPCompany: benchmark task-specific MCP tools</a></li><li><a href="https://docs.langchain.com/oss/python/langchain/retrieval" target="_blank" rel="noreferrer noopener">LangChain: retrieval</a></li></ul>
+      </article>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p>Материал опубликован как инженерная заметка. Все эксплуатационные идентификаторы в примерах обезличены.</p>
+    <a href="#top">К началу статьи</a>
+  </footer>
+
+  <script src="app.js" defer></script>
+</body>
+</html>
