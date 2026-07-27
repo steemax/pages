@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="980" viewBox="0 0 1800 980" role="img" aria-labelledby="title desc">
+  <title id="title">Как рендер списка ушёл от N+1 запросов</title>
+  <desc id="desc">Сравнение старого рендера с запросами на каждую VM и нового batch pre-fetch с lookup-картами</desc>
+  <defs>
+    <marker id="arrow-red" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2 2l8 4-8 4z" fill="#c84f55"/>
+    </marker>
+    <marker id="arrow-green" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2 2l8 4-8 4z" fill="#18825f"/>
+    </marker>
+  </defs>
+  <rect width="1800" height="980" fill="#f3f6f8"/>
+  <text x="90" y="95" fill="#10202f" font-family="Inter, Arial, sans-serif" font-size="46" font-weight="800">Рендер списка: от 4×N запросов к нескольким batch List</text>
+  <text x="92" y="138" fill="#637284" font-family="Inter, Arial, sans-serif" font-size="24">Для 50 ВМ это разница между сотнями API calls и одним коротким snapshot на запрос</text>
+
+  <g>
+    <rect x="90" y="205" width="760" height="610" rx="16" fill="#fff7f7" stroke="#efb3b8"/>
+    <text x="140" y="270" fill="#7f1d1d" font-family="Inter, Arial, sans-serif" font-size="34" font-weight="800">Было: внутри цикла по VM</text>
+    <text x="140" y="318" fill="#6f3b3b" font-family="Inter, Arial, sans-serif" font-size="23">На каждую VM снова идём в Kubernetes API</text>
+
+    <rect x="150" y="380" width="220" height="72" rx="10" fill="#ffffff" stroke="#efb3b8"/>
+    <text x="190" y="425" fill="#10202f" font-family="SFMono-Regular, Consolas, monospace" font-size="22">VM #1</text>
+    <rect x="150" y="492" width="220" height="72" rx="10" fill="#ffffff" stroke="#efb3b8"/>
+    <text x="190" y="537" fill="#10202f" font-family="SFMono-Regular, Consolas, monospace" font-size="22">VM #2</text>
+    <rect x="150" y="604" width="220" height="72" rx="10" fill="#ffffff" stroke="#efb3b8"/>
+    <text x="190" y="649" fill="#10202f" font-family="SFMono-Regular, Consolas, monospace" font-size="22">VM #N</text>
+
+    <g fill="#ffffff" stroke="#efb3b8">
+      <rect x="530" y="340" width="230" height="52" rx="8"/>
+      <rect x="530" y="412" width="230" height="52" rx="8"/>
+      <rect x="530" y="484" width="230" height="52" rx="8"/>
+      <rect x="530" y="556" width="230" height="52" rx="8"/>
+      <rect x="530" y="628" width="230" height="52" rx="8"/>
+      <rect x="530" y="700" width="230" height="52" rx="8"/>
+    </g>
+    <g fill="#6f3b3b" font-family="SFMono-Regular, Consolas, monospace" font-size="18">
+      <text x="556" y="373">Services.List()</text>
+      <text x="556" y="445">VMI.Get()</text>
+      <text x="556" y="517">PVC.Get()</text>
+      <text x="556" y="589">ConfigMaps.List()</text>
+      <text x="556" y="661">Services.List()</text>
+      <text x="556" y="733">...</text>
+    </g>
+    <g stroke="#c84f55" stroke-width="4" marker-end="url(#arrow-red)" fill="none">
+      <path d="M370 416h134"/>
+      <path d="M370 528h134"/>
+      <path d="M370 640h134"/>
+    </g>
+    <text x="140" y="760" fill="#7f1d1d" font-family="Inter, Arial, sans-serif" font-size="26" font-weight="800">Итог: примерно 4×N + 1 API calls</text>
+  </g>
+
+  <g>
+    <rect x="950" y="205" width="760" height="610" rx="16" fill="#f1fbf7" stroke="#93d4bd"/>
+    <text x="1000" y="270" fill="#0f513c" font-family="Inter, Arial, sans-serif" font-size="34" font-weight="800">Стало: batch pre-fetch</text>
+    <text x="1000" y="318" fill="#316962" font-family="Inter, Arial, sans-serif" font-size="23">Один snapshot, затем только обращения к памяти</text>
+
+    <g fill="#ffffff" stroke="#93d4bd">
+      <rect x="1010" y="370" width="250" height="54" rx="8"/>
+      <rect x="1010" y="446" width="250" height="54" rx="8"/>
+      <rect x="1010" y="522" width="250" height="54" rx="8"/>
+      <rect x="1010" y="598" width="250" height="54" rx="8"/>
+      <rect x="1010" y="674" width="250" height="54" rx="8"/>
+    </g>
+    <g fill="#316962" font-family="SFMono-Regular, Consolas, monospace" font-size="18">
+      <text x="1040" y="404">Services.List()</text>
+      <text x="1040" y="480">VMI.List()</text>
+      <text x="1040" y="556">PVC.List()</text>
+      <text x="1040" y="632">ConfigMaps.List()</text>
+      <text x="1040" y="708">VM.List()</text>
+    </g>
+
+    <rect x="1422" y="375" width="210" height="280" rx="12" fill="#ffffff" stroke="#93d4bd"/>
+    <text x="1464" y="430" fill="#10202f" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="800">lookup maps</text>
+    <text x="1464" y="480" fill="#316962" font-family="SFMono-Regular, Consolas, monospace" font-size="18">svcByDomain</text>
+    <text x="1464" y="518" fill="#316962" font-family="SFMono-Regular, Consolas, monospace" font-size="18">vmiByName</text>
+    <text x="1464" y="556" fill="#316962" font-family="SFMono-Regular, Consolas, monospace" font-size="18">pvcByName</text>
+    <text x="1464" y="594" fill="#316962" font-family="SFMono-Regular, Consolas, monospace" font-size="18">allowedSet</text>
+
+    <g stroke="#18825f" stroke-width="4" marker-end="url(#arrow-green)" fill="none">
+      <path d="M1260 397h138"/>
+      <path d="M1260 473h138"/>
+      <path d="M1260 549h138"/>
+      <path d="M1260 625h138"/>
+    </g>
+
+    <text x="1000" y="760" fill="#0f513c" font-family="Inter, Arial, sans-serif" font-size="26" font-weight="800">Итог: около 5 List-запросов на весь рендер</text>
+  </g>
+
+  <g>
+    <rect x="390" y="860" width="1020" height="60" rx="10" fill="#10202f"/>
+    <text x="450" y="899" fill="#ffffff" font-family="SFMono-Regular, Consolas, monospace" font-size="21">Данные свежие на каждый refresh, но API больше не получает N+1 нагрузку</text>
+  </g>
+</svg>
