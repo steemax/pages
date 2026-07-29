@@ -11,7 +11,7 @@
   <meta property="og:locale" content="ru_RU">
   <meta property="og:title" content="Внутренний dev cloud на KubeVirt: self-service ВМ для разработчиков">
   <meta property="og:description" content="Внутренний dev cloud на KubeVirt: создание и управление VM без ручных заявок, шаблоны, Keycloak-доступы, бюджеты команд, метрики и serial-консоль.">
-  <meta property="og:image" content="https://steemax.github.io/pages/articles/kubevirt-dev-cloud/assets/article-cover-habr.png">
+  <meta property="og:image" content="https://steemax.github.io/pages/articles/kubevirt-dev-cloud/assets/article-cover-habr.png?v=2daec42f3d">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="canonical" href="https://steemax.github.io/pages/articles/kubevirt-dev-cloud/">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><rect width=%2264%22 height=%2264%22 rx=%228%22 fill=%22%2310202f%22/><text x=%2232%22 y=%2241%22 text-anchor=%22middle%22 font-family=%22monospace%22 font-size=%2224%22 fill=%22%23ffffff%22>KV</text></svg>">
@@ -23,7 +23,7 @@
   "headline": "Внутренний dev cloud на KubeVirt: self-service ВМ для разработчиков",
   "description": "Внутренний dev cloud на KubeVirt: создание и управление VM без ручных заявок, шаблоны, Keycloak-доступы, бюджеты команд, метрики и serial-консоль.",
   "inLanguage": "ru-RU",
-  "image": "https://steemax.github.io/pages/articles/kubevirt-dev-cloud/assets/article-cover-habr.png",
+  "image": "https://steemax.github.io/pages/articles/kubevirt-dev-cloud/assets/article-cover-habr.png?v=2daec42f3d",
   "keywords": [
     "KubeVirt",
     "Kubernetes",
@@ -51,7 +51,7 @@
   <main id="top">
     <section class="hero" aria-labelledby="article-title">
       <h1 id="article-title" class="sr-only">Внутренний dev cloud на KubeVirt: self-service ВМ для разработчиков</h1>
-      <img src="assets/article-cover-habr.png" alt="Внутренний dev cloud на KubeVirt: self-service ВМ для разработчиков" width="780" height="440">
+      <img src="assets/article-cover-habr.png?v=2daec42f3d" alt="Внутренний dev cloud на KubeVirt: self-service ВМ для разработчиков" width="780" height="440">
       <div class="hero-caption">
         <span>Dev contour · KubeVirt · budgets · Keycloak</span>
         <span>2 133 слов</span>
@@ -81,7 +81,7 @@ kubevirt-manager    -&gt; self-service, policy и пользовательски
 Keycloak            -&gt; идентификация и группы доступа
 Prometheus          -&gt; метрики и первичная диагностика</code></pre></div>
 <p>В результате разработчик сам создаёт VM из поддерживаемого шаблона, управляет её жизненным циклом, открывает порты, меняет ресурсы и заходит в serial-консоль. Инфраструктурная команда определяет доступные рамки и подключается только там, где действительно требуется инженерное решение.</p>
-<figure><a href="assets/ui-real-dashboard.png" target="_blank"><img src="assets/ui-real-dashboard.png" alt="Рабочий список ВМ: фильтры, карточки, статусы, ресурсы и быстрые действия" width="1665" height="945" loading="lazy"></a><figcaption>Рабочий список ВМ: фильтры, карточки, статусы, ресурсы и быстрые действия</figcaption></figure>
+<figure><a href="assets/ui-real-dashboard.png?v=ce29c91012" target="_blank"><img src="assets/ui-real-dashboard.png?v=ce29c91012" alt="Рабочий список ВМ: фильтры, карточки, статусы, ресурсы и быстрые действия" width="1665" height="945" loading="lazy"></a><figcaption>Рабочий список ВМ: фильтры, карточки, статусы, ресурсы и быстрые действия</figcaption></figure>
 <p>Это не попытка заменить Harvester, OpenShift Virtualization или большой корпоративный cloud portal. Получился компактный продукт для конкретного процесса: дать техническим пользователям самостоятельность в dev-контуре, но не превратить их в администраторов Kubernetes.</p>
 <p>Все имена ВМ, команд, нод, домены, IP-адреса, registry и пользовательские идентификаторы на скриншотах заменены. Сценарии и устройство интерфейса сохранены.</p>
 <h2 id="chto-poluchilos">Что получилось<a class="heading-anchor" href="#chto-poluchilos" aria-label="Ссылка на раздел «Что получилось»">#</a></h2>
@@ -118,7 +118,7 @@ Go HTTP server
   +--&gt; kubernetes client-go: Service, Secret, PVC, Events, Pod logs
   |
   +--&gt; Prometheus HTTP API: CPU, RAM, network</code></pre></div>
-<figure><a href="assets/article-architecture.png" target="_blank"><img src="assets/article-architecture.png" alt="Схема компонентов kubevirt-manager" width="1800" height="980" loading="lazy"></a><figcaption>Схема компонентов kubevirt-manager</figcaption></figure>
+<figure><a href="assets/article-architecture.png?v=9eab654981" target="_blank"><img src="assets/article-architecture.png?v=9eab654981" alt="Схема компонентов kubevirt-manager" width="1800" height="980" loading="lazy"></a><figcaption>Схема компонентов kubevirt-manager</figcaption></figure>
 <p>Отдельной базы данных пока нет. VM, владельцы, сервисы, диски и группы доступа описаны Kubernetes-объектами. Локальная память используется только для короткоживущего состояния выполняющихся операций.</p>
 <p>Формирование HTML на сервере здесь оказалось практичным выбором. Доступы проверяются ещё до построения страницы, а небольшой JS-слой отвечает за фильтры, модальные окна, обновление статуса и WebSocket-консоль. В итоге и интерфейс, и вся серверная логика живут в одном Go-приложении: не понадобились отдельное frontend-приложение, дополнительный API для него и дублирование моделей данных.</p>
 <h2 id="sozdanie-vm-scenariy-vmesto-yaml">Создание VM: сценарий вместо YAML<a class="heading-anchor" href="#sozdanie-vm-scenariy-vmesto-yaml" aria-label="Ссылка на раздел «Создание VM: сценарий вместо YAML»">#</a></h2>
@@ -141,15 +141,15 @@ Go HTTP server
 <p>Такая же проверка срабатывает при увеличении ресурсов, но для resize учитывается только разница между текущей и новой конфигурацией. Если VM уже занимает <code>4 vCPU / 8 Gi</code>, а пользователь увеличивает её до <code>6 vCPU / 16 Gi</code>, дополнительный расход составляет <code>2 vCPU / 8 Gi</code>, а не полный новый размер.</p>
 <p>При этом бюджет команды и свободная ёмкость кластера — разные ограничения. Первый отвечает за справедливое распределение ресурсов между командами, вторая показывает, может ли инфраструктура разместить новые VM прямо сейчас. Даже при достаточном общем запасе отдельная нода может оказаться перегружена.</p>
 <p>Администраторская страница показывает allocatable CPU/RAM, заявку запущенных VM, свободную ёмкость и переподписку для каждой KubeVirt-ноды. Ниже тот же расход агрегируется по командам.</p>
-<figure><a href="assets/ui-real-admin-nodes.png" target="_blank"><img src="assets/ui-real-admin-nodes.png" alt="Админский экран: ёмкость, переподписка нод и потребление по командам" width="1775" height="886" loading="lazy"></a><figcaption>Админский экран: ёмкость, переподписка нод и потребление по командам</figcaption></figure>
+<figure><a href="assets/ui-real-admin-nodes.png?v=6a760c7866" target="_blank"><img src="assets/ui-real-admin-nodes.png?v=6a760c7866" alt="Админский экран: ёмкость, переподписка нод и потребление по командам" width="1775" height="886" loading="lazy"></a><figcaption>Админский экран: ёмкость, переподписка нод и потребление по командам</figcaption></figure>
 <p>Это позволяет одновременно видеть соблюдение командных квот и состояние самой инфраструктуры. Например, команда может исчерпать свой бюджет при наличии свободной ёмкости в кластере. Возможна и обратная ситуация: суммарный запас ещё есть, но отдельная нода уже переподписана по CPU.</p>
 <h2 id="stranica-vm-kak-rabochee-mesto">Страница VM как рабочее место<a class="heading-anchor" href="#stranica-vm-kak-rabochee-mesto" aria-label="Ссылка на раздел «Страница VM как рабочее место»">#</a></h2>
 <p>Dashboard нужен для быстрого обзора. Detail-страница собирает всё, что требуется для управления и первичной диагностики конкретной VM:</p>
 <ul><li>шаблон, ноду, IP, домен и порты;</li><li>состояние и наличие guest-agent;</li><li>CPU, RAM и network из Prometheus;</li><li>Kubernetes Events;</li><li>логи <code>virt-launcher</code> и гостевой <code>dmesg</code>;</li><li>serial-консоль через WebSocket и xterm.js;</li><li>resize, migration и управление группами;</li><li>установку root-пароля через guest-agent.</li></ul>
-<figure><a href="assets/ui-real-detail.png" target="_blank"><img src="assets/ui-real-detail.png" alt="Карточка ВМ: информация, доступы, guest-agent и метрики" width="1656" height="950" loading="lazy"></a><figcaption>Карточка ВМ: информация, доступы, guest-agent и метрики</figcaption></figure>
+<figure><a href="assets/ui-real-detail.png?v=fea44080e2" target="_blank"><img src="assets/ui-real-detail.png?v=fea44080e2" alt="Карточка ВМ: информация, доступы, guest-agent и метрики" width="1656" height="950" loading="lazy"></a><figcaption>Карточка ВМ: информация, доступы, guest-agent и метрики</figcaption></figure>
 <p>Пользователь может отличить «VM запущена» от «приложение внутри действительно работает», посмотреть, на какой ноде живёт инстанс, и увидеть события вокруг Service или IP announcement.</p>
 <p>Serial-консоль даёт аварийный доступ без установки <code>virtctl</code> на рабочую станцию. Это особенно полезно, когда SSH ещё не поднялся или сетевые настройки внутри гостя повреждены.</p>
-<figure><a href="assets/ui-real-console.png" target="_blank"><img src="assets/ui-real-console.png" alt="События Kubernetes и serial-консоль прямо в браузере" width="1663" height="945" loading="lazy"></a><figcaption>События Kubernetes и serial-консоль прямо в браузере</figcaption></figure>
+<figure><a href="assets/ui-real-console.png?v=e65ac90723" target="_blank"><img src="assets/ui-real-console.png?v=e65ac90723" alt="События Kubernetes и serial-консоль прямо в браузере" width="1663" height="945" loading="lazy"></a><figcaption>События Kubernetes и serial-консоль прямо в браузере</figcaption></figure>
 <p>В итоге detail-страница становится единой точкой первого разбора. Если информации недостаточно, пользователь уже приходит к инфраструктурной команде не с сообщением «VM не работает», а с конкретным состоянием, событием или графиком.</p>
 <h2 id="chto-potrebovalos-dlya-ekspluatacionnogo-kachestva">Что потребовалось для эксплуатационного качества<a class="heading-anchor" href="#chto-potrebovalos-dlya-ekspluatacionnogo-kachestva" aria-label="Ссылка на раздел «Что потребовалось для эксплуатационного качества»">#</a></h2>
 <p>Основные функции закрыли пользовательский путь, но для настоящего self-service этого недостаточно. Панель должна оставаться быстрой, показывать состояние долгих операций и корректно работать с конкурентной моделью Kubernetes без постоянного участия платформенной команды.</p>
@@ -162,7 +162,7 @@ VirtualMachineInstances.List() -&gt; map[vmName]VMI
 PersistentVolumeClaims.List()  -&gt; map[pvcName]diskSize
 Access groups                  -&gt; загружаются один раз</code></pre></div>
 <p>Дальше карточки собираются из lookup-карт в памяти. Это snapshot на один рендер, а не долгоживущий кэш: следующий refresh снова получает актуальные коллекции.</p>
-<figure><a href="assets/dashboard-refresh-flow.png" target="_blank"><img src="assets/dashboard-refresh-flow.png" alt="Как рендер списка ушёл от N+1 запросов" width="1800" height="980" loading="lazy"></a><figcaption>Как рендер списка ушёл от N+1 запросов</figcaption></figure>
+<figure><a href="assets/dashboard-refresh-flow.png?v=a9c38a62ea" target="_blank"><img src="assets/dashboard-refresh-flow.png?v=a9c38a62ea" alt="Как рендер списка ушёл от N+1 запросов" width="1800" height="980" loading="lazy"></a><figcaption>Как рендер списка ушёл от N+1 запросов</figcaption></figure>
 <p>Для текущих десятков VM этого достаточно. При росте масштаба следующим шагом будут shared informers и SSE, но основную проблему сначала стоило решить более простым способом.</p>
 <h3 id="vidimoe-sostoyanie-dolgih-operaciy">Видимое состояние долгих операций<a class="heading-anchor" href="#vidimoe-sostoyanie-dolgih-operaciy" aria-label="Ссылка на раздел «Видимое состояние долгих операций»">#</a></h3>
 <p>Resize запущенной VM включает stop, ожидание состояния <code>Stopped</code>, обновление template spec, start и ожидание <code>Running</code>. Пользователь не должен всё это время смотреть на активную кнопку и гадать, принят ли запрос.</p>
