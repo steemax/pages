@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Dev cloud на KubeVirt: self-service виртуалки для разработки без лишнего kubectl</title>
-  <meta name="description" content="Практический разбор внутреннего dev cloud на KubeVirt: self-service виртуалки для разработки, командные бюджеты, Keycloak, Prometheus, serial console, async resize и быстрый dashboard без N+1 запросов.">
+  <title>Внутренний dev cloud на KubeVirt: self-service ВМ для разработчиков</title>
+  <meta name="description" content="Внутренний dev cloud на KubeVirt: создание и управление VM без ручных заявок, шаблоны, Keycloak-доступы, бюджеты команд, метрики и serial-консоль.">
   <meta name="robots" content="index,follow">
   <meta name="theme-color" content="#10202f">
   <meta property="og:type" content="article">
   <meta property="og:locale" content="ru_RU">
-  <meta property="og:title" content="Dev cloud на KubeVirt: self-service виртуалки для разработки без лишнего kubectl">
-  <meta property="og:description" content="Практический разбор внутреннего dev cloud на KubeVirt: self-service виртуалки для разработки, командные бюджеты, Keycloak, Prometheus, serial console, async resize и быстрый dashboard без N+1 запросов.">
+  <meta property="og:title" content="Внутренний dev cloud на KubeVirt: self-service ВМ для разработчиков">
+  <meta property="og:description" content="Внутренний dev cloud на KubeVirt: создание и управление VM без ручных заявок, шаблоны, Keycloak-доступы, бюджеты команд, метрики и serial-консоль.">
   <meta property="og:image" content="https://steemax.github.io/pages/articles/kubevirt-dev-cloud/assets/article-cover-habr.png">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="canonical" href="https://steemax.github.io/pages/articles/kubevirt-dev-cloud/">
@@ -20,8 +20,8 @@
     {
   "@context": "https://schema.org",
   "@type": "TechArticle",
-  "headline": "Dev cloud на KubeVirt: self-service виртуалки для разработки без лишнего kubectl",
-  "description": "Практический разбор внутреннего dev cloud на KubeVirt: self-service виртуалки для разработки, командные бюджеты, Keycloak, Prometheus, serial console, async resize и быстрый dashboard без N+1 запросов.",
+  "headline": "Внутренний dev cloud на KubeVirt: self-service ВМ для разработчиков",
+  "description": "Внутренний dev cloud на KubeVirt: создание и управление VM без ручных заявок, шаблоны, Keycloak-доступы, бюджеты команд, метрики и serial-консоль.",
   "inLanguage": "ru-RU",
   "image": "https://steemax.github.io/pages/articles/kubevirt-dev-cloud/assets/article-cover-habr.png",
   "keywords": [
@@ -44,213 +44,157 @@
     <div class="site-meta">
       <a class="site-home-link" href="../../">Все статьи</a>
       <span>Go · KubeVirt · dev cloud</span>
-      <span>14 минут</span>
+      <span>9 минут</span>
     </div>
   </header>
 
   <main id="top">
     <section class="hero" aria-labelledby="article-title">
-      <h1 id="article-title" class="sr-only">Dev cloud на KubeVirt: self-service виртуалки для разработки без лишнего kubectl</h1>
-      <img src="assets/article-cover-habr.png" alt="Dev cloud на KubeVirt: self-service виртуалки для разработки без лишнего kubectl" width="780" height="440">
+      <h1 id="article-title" class="sr-only">Внутренний dev cloud на KubeVirt: self-service ВМ для разработчиков</h1>
+      <img src="assets/article-cover-habr.png" alt="Внутренний dev cloud на KubeVirt: self-service ВМ для разработчиков" width="780" height="440">
       <div class="hero-caption">
         <span>Dev contour · KubeVirt · budgets · Keycloak</span>
-        <span>3 247 слов</span>
+        <span>2 133 слов</span>
       </div>
     </section>
 
     <details class="mobile-toc">
       <summary>Оглавление</summary>
-      <nav aria-label="Оглавление статьи"><ul class="toc-list"><li><a href="#zachem-otdelnyy-dev-cloud" data-section="zachem-otdelnyy-dev-cloud">Зачем отдельный dev cloud</a></li><li><a href="#korotko" data-section="korotko">Коротко</a></li><li><a href="#kak-vyglyadit-ui" data-section="kak-vyglyadit-ui">Как выглядит UI</a></li><li><a href="#arhitektura" data-section="arhitektura">Архитектура</a></li><li><a href="#pochemu-ne-prosto-dat-kubectl" data-section="pochemu-ne-prosto-dat-kubectl">Почему не просто дать kubectl</a></li><li><a href="#model-dannyh" data-section="model-dannyh">Модель данных</a></li><li><a href="#komandy-vladelcy-i-byudzhety" data-section="komandy-vladelcy-i-byudzhety">Команды, владельцы и бюджеты</a></li><li><a href="#sozdanie-vm-iz-shablona" data-section="sozdanie-vm-iz-shablona">Создание ВМ из шаблона</a></li><li><a href="#spisok-vm-i-cena-n-1-zaprosov" data-section="spisok-vm-i-cena-n-1-zaprosov">Список ВМ и цена N+1 запросов</a></li><li><a href="#dolgie-operacii-i-sostoyanie-ui" data-section="dolgie-operacii-i-sostoyanie-ui">Долгие операции и состояние UI</a></li><li><a href="#resize-cpu-ram" data-section="resize-cpu-ram">Resize CPU/RAM</a></li><li><a href="#porty-kak-chast-self-service" data-section="porty-kak-chast-self-service">Порты как часть self-service</a></li><li><a href="#konsol-logi-i-metriki" data-section="konsol-logi-i-metriki">Консоль, логи и метрики</a></li><li><a href="#dostupy-keycloak-app-gruppy-i-byudzhety" data-section="dostupy-keycloak-app-gruppy-i-byudzhety">Доступы: Keycloak, app-группы и бюджеты</a></li><li><a href="#ui-inzhenernyy-no-ne-bezrazlichnyy" data-section="ui-inzhenernyy-no-ne-bezrazlichnyy">UI: инженерный, но не безразличный</a></li><li><a href="#chto-esche-nuzhno-dozhat" data-section="chto-esche-nuzhno-dozhat">Что ещё нужно дожать</a></li><li><a href="#pochemu-eto-polezno-imenno-vokrug-kubevirt" data-section="pochemu-eto-polezno-imenno-vokrug-kubevirt">Почему это полезно именно вокруг KubeVirt</a></li><li><a href="#vyvody" data-section="vyvody">Выводы</a></li><li><a href="#materialy" data-section="materialy">Материалы</a></li></ul></nav>
+      <nav aria-label="Оглавление статьи"><ul class="toc-list"><li><a href="#chto-poluchilos" data-section="chto-poluchilos">Что получилось</a></li><li><a href="#zachem-otdelnyy-dev-kontur" data-section="zachem-otdelnyy-dev-kontur">Зачем отдельный dev-контур</a></li><li><a href="#pochemu-ne-prosto-kubectl" data-section="pochemu-ne-prosto-kubectl">Почему не просто kubectl</a></li><li><a href="#arhitektura" data-section="arhitektura">Архитектура</a></li><li><a href="#sozdanie-vm-scenariy-vmesto-yaml" data-section="sozdanie-vm-scenariy-vmesto-yaml">Создание VM: сценарий вместо YAML</a></li><li><a href="#set-kak-chast-vm" data-section="set-kak-chast-vm">Сеть как часть VM</a></li><li><a href="#komandy-dostupy-i-byudzhety" data-section="komandy-dostupy-i-byudzhety">Команды, доступы и бюджеты</a></li><li><a href="#stranica-vm-kak-rabochee-mesto" data-section="stranica-vm-kak-rabochee-mesto">Страница VM как рабочее место</a></li><li><a href="#chto-potrebovalos-dlya-ekspluatacionnogo-kachestva" data-section="chto-potrebovalos-dlya-ekspluatacionnogo-kachestva">Что потребовалось для эксплуатационного качества</a><ul class="toc-sublist"><li><a href="#bystryy-dashboard-bez-zastoyavshegosya-kesha" data-section="bystryy-dashboard-bez-zastoyavshegosya-kesha">Быстрый dashboard без застоявшегося кэша</a></li><li><a href="#vidimoe-sostoyanie-dolgih-operaciy" data-section="vidimoe-sostoyanie-dolgih-operaciy">Видимое состояние долгих операций</a></li><li><a href="#sostoyanie-kubernetes-nuzhno-perechityvat" data-section="sostoyanie-kubernetes-nuzhno-perechityvat">Состояние Kubernetes нужно перечитывать</a></li></ul></li><li><a href="#kuda-razvivat-dalshe" data-section="kuda-razvivat-dalshe">Куда развивать дальше</a></li><li><a href="#chto-izmenilos-v-processe" data-section="chto-izmenilos-v-processe">Что изменилось в процессе</a></li><li><a href="#materialy" data-section="materialy">Материалы</a></li></ul></nav>
     </details>
 
     <div class="article-layout">
       <aside class="desktop-toc">
         <nav aria-label="Оглавление статьи">
           <p class="toc-title">Оглавление</p>
-          <ul class="toc-list"><li><a href="#zachem-otdelnyy-dev-cloud" data-section="zachem-otdelnyy-dev-cloud">Зачем отдельный dev cloud</a></li><li><a href="#korotko" data-section="korotko">Коротко</a></li><li><a href="#kak-vyglyadit-ui" data-section="kak-vyglyadit-ui">Как выглядит UI</a></li><li><a href="#arhitektura" data-section="arhitektura">Архитектура</a></li><li><a href="#pochemu-ne-prosto-dat-kubectl" data-section="pochemu-ne-prosto-dat-kubectl">Почему не просто дать kubectl</a></li><li><a href="#model-dannyh" data-section="model-dannyh">Модель данных</a></li><li><a href="#komandy-vladelcy-i-byudzhety" data-section="komandy-vladelcy-i-byudzhety">Команды, владельцы и бюджеты</a></li><li><a href="#sozdanie-vm-iz-shablona" data-section="sozdanie-vm-iz-shablona">Создание ВМ из шаблона</a></li><li><a href="#spisok-vm-i-cena-n-1-zaprosov" data-section="spisok-vm-i-cena-n-1-zaprosov">Список ВМ и цена N+1 запросов</a></li><li><a href="#dolgie-operacii-i-sostoyanie-ui" data-section="dolgie-operacii-i-sostoyanie-ui">Долгие операции и состояние UI</a></li><li><a href="#resize-cpu-ram" data-section="resize-cpu-ram">Resize CPU/RAM</a></li><li><a href="#porty-kak-chast-self-service" data-section="porty-kak-chast-self-service">Порты как часть self-service</a></li><li><a href="#konsol-logi-i-metriki" data-section="konsol-logi-i-metriki">Консоль, логи и метрики</a></li><li><a href="#dostupy-keycloak-app-gruppy-i-byudzhety" data-section="dostupy-keycloak-app-gruppy-i-byudzhety">Доступы: Keycloak, app-группы и бюджеты</a></li><li><a href="#ui-inzhenernyy-no-ne-bezrazlichnyy" data-section="ui-inzhenernyy-no-ne-bezrazlichnyy">UI: инженерный, но не безразличный</a></li><li><a href="#chto-esche-nuzhno-dozhat" data-section="chto-esche-nuzhno-dozhat">Что ещё нужно дожать</a></li><li><a href="#pochemu-eto-polezno-imenno-vokrug-kubevirt" data-section="pochemu-eto-polezno-imenno-vokrug-kubevirt">Почему это полезно именно вокруг KubeVirt</a></li><li><a href="#vyvody" data-section="vyvody">Выводы</a></li><li><a href="#materialy" data-section="materialy">Материалы</a></li></ul>
+          <ul class="toc-list"><li><a href="#chto-poluchilos" data-section="chto-poluchilos">Что получилось</a></li><li><a href="#zachem-otdelnyy-dev-kontur" data-section="zachem-otdelnyy-dev-kontur">Зачем отдельный dev-контур</a></li><li><a href="#pochemu-ne-prosto-kubectl" data-section="pochemu-ne-prosto-kubectl">Почему не просто kubectl</a></li><li><a href="#arhitektura" data-section="arhitektura">Архитектура</a></li><li><a href="#sozdanie-vm-scenariy-vmesto-yaml" data-section="sozdanie-vm-scenariy-vmesto-yaml">Создание VM: сценарий вместо YAML</a></li><li><a href="#set-kak-chast-vm" data-section="set-kak-chast-vm">Сеть как часть VM</a></li><li><a href="#komandy-dostupy-i-byudzhety" data-section="komandy-dostupy-i-byudzhety">Команды, доступы и бюджеты</a></li><li><a href="#stranica-vm-kak-rabochee-mesto" data-section="stranica-vm-kak-rabochee-mesto">Страница VM как рабочее место</a></li><li><a href="#chto-potrebovalos-dlya-ekspluatacionnogo-kachestva" data-section="chto-potrebovalos-dlya-ekspluatacionnogo-kachestva">Что потребовалось для эксплуатационного качества</a><ul class="toc-sublist"><li><a href="#bystryy-dashboard-bez-zastoyavshegosya-kesha" data-section="bystryy-dashboard-bez-zastoyavshegosya-kesha">Быстрый dashboard без застоявшегося кэша</a></li><li><a href="#vidimoe-sostoyanie-dolgih-operaciy" data-section="vidimoe-sostoyanie-dolgih-operaciy">Видимое состояние долгих операций</a></li><li><a href="#sostoyanie-kubernetes-nuzhno-perechityvat" data-section="sostoyanie-kubernetes-nuzhno-perechityvat">Состояние Kubernetes нужно перечитывать</a></li></ul></li><li><a href="#kuda-razvivat-dalshe" data-section="kuda-razvivat-dalshe">Куда развивать дальше</a></li><li><a href="#chto-izmenilos-v-processe" data-section="chto-izmenilos-v-processe">Что изменилось в процессе</a></li><li><a href="#materialy" data-section="materialy">Материалы</a></li></ul>
         </nav>
       </aside>
 
       <article class="article-body">
-        <p>Сначала контекст. В инфраструктуре обычно уже есть production-виртуализация: надёжная, взрослая, с регламентами, ответственностью и понятной ценой ошибки. И есть разработка, которой постоянно нужны обычные виртуальные машины: Debian для тестов, PostgreSQL-стенд, маленький Kubernetes-in-Kubernetes, временная ВМ под отладку, окружение для эксперимента на пару дней.</p>
-<p>Если каждую такую dev-VM заводить в production-виртуализации, начинается медленное размазывание контуров. Продовая платформа обрастает временными стендами, ресурсные заявки смешиваются с разработческими экспериментами, cleanup зависит от дисциплины людей, а разработчик всё равно ждёт, пока кто-то создаст ему машину.</p>
-<p>Идея была в другом: сделать отдельный внутренний dev cloud в дев-контуре. Разработчик получает пространство и свободу: сам создаёт ВМ из шаблона, сам открывает нужные порты, сам смотрит консоль и метрики. Платформа при этом задаёт рамки: шаблоны, доступы, лимиты, бюджеты команд и границы контура. Production-виртуализация остаётся для production-нагрузки, а эксперименты живут там, где им место.</p>
-<p>Так появился небольшой <code>kubevirt-manager</code>: Go-приложение с server-side HTML, которое работает как внутренняя панель управления виртуалками в Kubernetes. Оно не пытается заменить Harvester, OpenShift Virtualization UI или полноценный портал. Это тонкий слой между людьми и KubeVirt API, написанный под конкретный dev-contour процесс: быстро дать разработчику стенд, но оставить доступы, потребление и границы среды под контролем платформы.</p>
-<p>Все имена ВМ, команд, нод, домены, IP-адреса, registry и пользовательские идентификаторы на скриншотах ниже заменены. Сценарии, структура интерфейса и классы проблем сохранены.</p>
-<p>Эта статья не про установку KubeVirt с нуля. Она про то, что началось после первой работающей веб-морды: N+1-запросы на списке ВМ, повторные действия во время долгих операций, конфликты <code>resourceVersion</code>, модель доступа и граница между учётом командных ресурсов и настоящей квотой.</p>
-<h2 id="zachem-otdelnyy-dev-cloud">Зачем отдельный dev cloud<a class="heading-anchor" href="#zachem-otdelnyy-dev-cloud" aria-label="Ссылка на раздел «Зачем отдельный dev cloud»">#</a></h2>
-<p>Главная ценность здесь не в том, что у KubeVirt появилась веб-морда. Главная ценность — в разделении контуров и ответственности.</p>
-<p>Production-виртуализация обычно оптимизирована под стабильные нагрузки: важные сервисы, долгоживущие машины, понятный lifecycle, change management. Разработка живёт иначе. Ей нужны короткие циклы, временные стенды, быстрый resize, возможность что-то сломать и пересоздать без заявки на каждый шаг.</p>
-<p>Отдельный dev cloud даёт несколько практических эффектов:</p>
-<ul><li>не нужно плодить временные ВМ на production-виртуализации;</li><li>разработчики получают self-service без выдачи им административного доступа к кластеру;</li><li>команды работают в рамках понятного бюджета CPU/RAM/диска;</li><li>платформа контролирует шаблоны, сеть, доступы и опасные операции;</li><li>эксперименты остаются в дев-контуре и не влияют на production-нагрузку;</li><li>cleanup и accounting можно строить вокруг команд, а не вокруг ручных заявок.</li></ul>
-<p>Бюджет здесь не ограничивает свободу, а делает её безопасной. Если команда знает, что у неё есть, например, <code>48 vCPU</code>, <code>192 Gi RAM</code> и <code>1 Ti</code> диска в dev cloud, она может сама решать, какие стенды поднимать сегодня. Платформа должна вмешиваться только когда запрос выходит за согласованные границы.</p>
-<p>Если у вас ещё нет внутреннего cloud-портала, это не обязательно должно начинаться с большого продукта, каталога услуг и отдельной команды разработки. В dev-контуре можно начать с малого: несколько поддерживаемых шаблонов, понятные бюджеты команд, простая авторизация и UI над ограниченным набором операций. Уже это снимает десятки ручных заявок и даёт разработчикам самостоятельность без выхода в production-виртуализацию.</p>
-<h2 id="korotko">Коротко<a class="heading-anchor" href="#korotko" aria-label="Ссылка на раздел «Коротко»">#</a></h2>
-<p>Панель умеет:</p>
-<ul><li>показывать список ВМ с состоянием, CPU, RAM, диском, IP, портами, шаблоном, владельцем и нодой;</li><li>фильтровать список по статусу, команде и поиску;</li><li>создавать ВМ из заранее подготовленных шаблонов;</li><li>стартовать, останавливать, рестартовать и мигрировать ВМ;</li><li>менять CPU/RAM с явным предупреждением о рестарте;</li><li>выполнять resize асинхронно, с live-логом фаз операции;</li><li>управлять портами <code>LoadBalancer Service</code> для каждой ВМ;</li><li>открывать serial-консоль в браузере;</li><li>показывать логи <code>virt-launcher</code>, <code>dmesg</code> гостя и графики из Prometheus;</li><li>ограничивать доступ через Keycloak и app-группы;</li><li>показывать потребление ресурсов по командам, ёмкость нод и переподписку CPU/RAM.</li></ul>
-<p>Принципиально важная деталь: это не портал для случайных пользователей. Целевая аудитория понимает, что такое CPU/RAM, порт, сервис, downtime и шаблон ВМ. Поэтому интерфейс можно делать плотным и инженерным, без попытки спрятать все технические сущности. Но повторные клики во время операции, устаревшие данные, странные ошибки Kubernetes API и лишние права всё равно остаются проблемами продукта, а не пользователя.</p>
-<h2 id="kak-vyglyadit-ui">Как выглядит UI<a class="heading-anchor" href="#kak-vyglyadit-ui" aria-label="Ссылка на раздел «Как выглядит UI»">#</a></h2>
-<p>Пользовательская часть — это рабочий dashboard, а не лендинг. На первом экране должны быть видны ВМ команды, статусы, IP/порты, ресурсы, владелец, быстрые действия и создание новой VM. Разработчик приходит сюда не читать инструкцию, а поднять стенд, открыть порт, посмотреть состояние и уйти дальше работать.</p>
+        <p>У нас была довольно приземлённая инфраструктурная проблема: разработчикам регулярно требовались виртуальные машины, но механизма самообслуживания не существовало. Любая dev-VM начиналась с обращения к инфраструктурной команде. Инженеру нужно было выбрать образ, согласовать ресурсы, создать машину, настроить сеть и доступы.</p>
+<p>Пока запросы единичны, такой процесс выглядит терпимым. Но к созданию быстро добавляются resize, открытие портов, перезапуски, восстановление доступа и удаление забытых стендов. Пользователь ждёт своей очереди, инженер переключает контекст и тратит квалифицированное время на повторяемые действия. Для временных машин в dev-контуре это одновременно долго и дорого.</p>
+<p>Выдать разработчикам доступ к production-виртуализации или широкие права в Kubernetes тоже нельзя. Пользователю нужен ограниченный набор операций над своими VM, а платформе – контроль шаблонов, сети, ресурсов, владельцев и границ контура.</p>
+<p>Так появилась идея внутреннего dev cloud:</p>
+<div class="code-block"><div class="code-label">text</div><pre><code class="language-text">KubeVirt            -&gt; виртуализация внутри dev-кластера
+kubevirt-manager    -&gt; self-service, policy и пользовательские сценарии
+Keycloak            -&gt; идентификация и группы доступа
+Prometheus          -&gt; метрики и первичная диагностика</code></pre></div>
+<p>В результате разработчик сам создаёт VM из поддерживаемого шаблона, управляет её жизненным циклом, открывает порты, меняет ресурсы и заходит в serial-консоль. Инфраструктурная команда определяет доступные рамки и подключается только там, где действительно требуется инженерное решение.</p>
 <figure><a href="assets/ui-real-dashboard.png" target="_blank"><img src="assets/ui-real-dashboard.png" alt="Рабочий список ВМ: фильтры, карточки, статусы, ресурсы и быстрые действия" width="1665" height="945" loading="lazy"></a><figcaption>Рабочий список ВМ: фильтры, карточки, статусы, ресурсы и быстрые действия</figcaption></figure>
-<p>На detail-странице важен другой слой: информация о шаблоне и ноде, команды доступа, порты, root-пароль через guest-agent, графики CPU/RAM/network и действия над VM. В админском режиме здесь же можно управлять привязкой команд к VM, чтобы доступы оставались видимыми и проверяемыми.</p>
-<figure><a href="assets/ui-real-detail.png" target="_blank"><img src="assets/ui-real-detail.png" alt="Карточка ВМ: информация, доступы, guest-agent и метрики" width="1656" height="950" loading="lazy"></a><figcaption>Карточка ВМ: информация, доступы, guest-agent и метрики</figcaption></figure>
-<p>Админская страница отвечает уже не на вопрос «что происходит с этой ВМ», а на вопрос «что мы пообещали пользователям и куда это разместилось». Она сводит allocatable-ёмкость KubeVirt-нод, заявки запущенных ВМ, переподписку по каждой ноде и потребление в разрезе команд. Общий коэффициент <code>0.99×</code> сам по себе не означает, что кластер распределён равномерно: на отдельных нодах CPU уже может быть переподписан. Без такого среза общий зелёный показатель легко скрывает локальную проблему размещения.</p>
-<figure><a href="assets/ui-real-admin-nodes.png" target="_blank"><img src="assets/ui-real-admin-nodes.png" alt="Админский экран: ёмкость, переподписка нод и потребление по командам" width="1775" height="886" loading="lazy"></a><figcaption>Админский экран: ёмкость, переподписка нод и потребление по командам</figcaption></figure>
-<p>Нижняя часть detail-страницы закрывает эксплуатационные сценарии: Kubernetes Events помогают понять, что происходило с сервисом и объявлением IP, а serial-консоль даёт аварийный доступ без отдельного <code>virtctl</code> на рабочей станции пользователя.</p>
-<figure><a href="assets/ui-real-console.png" target="_blank"><img src="assets/ui-real-console.png" alt="События Kubernetes и serial-консоль прямо в браузере" width="1663" height="945" loading="lazy"></a><figcaption>События Kubernetes и serial-консоль прямо в браузере</figcaption></figure>
+<p>Это не попытка заменить Harvester, OpenShift Virtualization или большой корпоративный cloud portal. Получился компактный продукт для конкретного процесса: дать техническим пользователям самостоятельность в dev-контуре, но не превратить их в администраторов Kubernetes.</p>
+<p>Все имена ВМ, команд, нод, домены, IP-адреса, registry и пользовательские идентификаторы на скриншотах заменены. Сценарии и устройство интерфейса сохранены.</p>
+<h2 id="chto-poluchilos">Что получилось<a class="heading-anchor" href="#chto-poluchilos" aria-label="Ссылка на раздел «Что получилось»">#</a></h2>
+<p><code>kubevirt-manager</code> – Go-приложение, которое формирует HTML-страницы на сервере и использует небольшое количество JavaScript для интерактивных операций. Оно собирает несколько Kubernetes-сущностей в понятный пользователю объект «виртуальная машина».</p>
+<p>Пользовательская часть закрывает почти весь ежедневный lifecycle:</p>
+<ul><li>создание VM из подготовленного шаблона;</li><li>выбор CPU, RAM, режима хранения, SSH key и начальных портов;</li><li>список VM со статусами, IP, доменами, портами, ресурсами и нодами;</li><li>поиск и фильтры по состоянию и команде;</li><li>start, stop, restart и migration;</li><li>resize CPU/RAM с явным предупреждением о downtime;</li><li>управление опубликованными портами;</li><li>установка root-пароля через guest-agent;</li><li>Events, логи, метрики и serial-консоль в браузере.</li></ul>
+<p>Администратор получает отдельный контур:</p>
+<ul><li>обзор всех VM и их владельцев;</li><li>управление прикладными группами доступа;</li><li>привязку одной VM к нескольким командам;</li><li>allocatable-ёмкость KubeVirt-нод;</li><li>заявку vCPU/RAM запущенных VM;</li><li>переподписку по каждой ноде;</li><li>потребление ресурсов в разрезе команд.</li></ul>
+<p>Главный результат не в количестве кнопок. Пользователь больше не оформляет отдельную заявку на каждое действие, а инфраструктурная команда сохраняет контроль над тем, какие образы, размеры VM и сетевые операции вообще доступны.</p>
+<h2 id="zachem-otdelnyy-dev-kontur">Зачем отдельный dev-контур<a class="heading-anchor" href="#zachem-otdelnyy-dev-kontur" aria-label="Ссылка на раздел «Зачем отдельный dev-контур»">#</a></h2>
+<p>Production-виртуализация обычно оптимизирована под стабильные и долгоживущие нагрузки. Там оправданы change management, согласования и осторожный lifecycle. Разработка живёт в другом ритме: сегодня нужен тестовый PostgreSQL, завтра стенд для новой версии сервиса, через неделю всё это можно удалить.</p>
+<p>Если временные dev-VM размещать рядом с production-нагрузкой, постепенно смешиваются и ресурсы, и ответственность:</p>
+<ul><li>временные стенды становятся долгоживущими;</li><li>учёт разработки смешивается с production capacity;</li><li>эксперименты наследуют production-регламенты и теряют скорость;</li><li>cleanup зависит от дисциплины отдельных людей;</li><li>ошибка в экспериментальном стенде получает ненужный blast radius.</li></ul>
+<p>Отдельный dev cloud задаёт более подходящий контракт. Платформа предоставляет конечный объём CPU, RAM и storage, поддерживаемые шаблоны и сетевую модель. Команды получают бюджеты и внутри них сами решают, какие стенды важнее прямо сейчас.</p>
+<p>Такой подход даёт разработчику пространство для экспериментов, но оставляет эти эксперименты внутри dev-контура. Production-виртуализация продолжает решать production-задачи.</p>
+<h2 id="pochemu-ne-prosto-kubectl">Почему не просто kubectl<a class="heading-anchor" href="#pochemu-ne-prosto-kubectl" aria-label="Ссылка на раздел «Почему не просто kubectl»">#</a></h2>
+<p>Для платформенного инженера команды <code>kubectl get vm</code>, <code>virtctl console</code> и <code>kubectl edit svc</code> выглядят естественно. Для self-service это слишком широкий и слишком низкоуровневый интерфейс.</p>
+<p>За одной карточкой VM скрывается сразу несколько слоёв:</p>
+<ul><li><code>VirtualMachine</code> хранит желаемую конфигурацию, а <code>VirtualMachineInstance</code> — текущее состояние запущенного экземпляра;</li><li>системный диск может быть постоянным, через <code>DataVolume</code> и <code>PersistentVolumeClaim</code>, или временным — прямо из контейнерного Docker/OCI-образа;</li><li>временный вариант удобен для одноразовых стендов: после остановки и нового запуска VM возвращается к исходному образу;</li><li>cloud-init подготавливает машину под конкретный сценарий: создаёт пользователя, добавляет SSH key и выполняет начальную настройку;</li><li><code>Service</code> публикует IP и порты, <code>Secret</code> хранит данные доступа, а lifecycle и console работают через отдельные API.</li></ul>
+<p>Выдать человеку права на произвольное редактирование этих объектов сложнее и опаснее, чем разрешить небольшой набор проверенных операций. Веб-панель здесь является не только удобным интерфейсом, но и дополнительной policy boundary: backend валидирует поля, проверяет владельца и вызывает только поддерживаемые сценарии.</p>
+<p>Целевая аудитория при этом остаётся технической. Интерфейс не скрывает CPU, RAM, сетевые порты, guest-agent, migration или downtime. Он скрывает лишнюю связность между CRD и необходимость помнить правильную последовательность команд.</p>
 <h2 id="arhitektura">Архитектура<a class="heading-anchor" href="#arhitektura" aria-label="Ссылка на раздел «Архитектура»">#</a></h2>
-<p>Внутри всё довольно прямолинейно.</p>
+<p>Основным source of truth остаётся Kubernetes:</p>
 <div class="code-block"><div class="code-label">text</div><pre><code class="language-text">браузер
   |
   | HTML forms / fetch / WebSocket
   v
 Go HTTP server
   |
-  +--&gt; auth middleware: Keycloak OIDC, session cookie, app-группы
+  +--&gt; Keycloak OIDC: пользователь, сессия, группы
   |
-  +--&gt; kubevirt.io/client-go: VM, VMI, start/stop/restart/migrate/console
+  +--&gt; kubevirt client-go: VM, VMI, lifecycle, migration, console
   |
-  +--&gt; kubernetes/client-go: Service, Secret, PVC, ConfigMap, Pod logs, Events
+  +--&gt; kubernetes client-go: Service, Secret, PVC, Events, Pod logs
   |
-  +--&gt; Prometheus HTTP API: CPU/RAM/network графики</code></pre></div>
-<p>Приложение хранит минимум собственного состояния. Основной source of truth остаётся в Kubernetes: <code>VirtualMachine</code>, <code>VirtualMachineInstance</code>, <code>Service</code>, <code>Secret</code>, <code>PersistentVolumeClaim</code>, <code>ConfigMap</code>. Локальная память используется только для короткоживущих async-операций, например resize.</p>
+  +--&gt; Prometheus HTTP API: CPU, RAM, network</code></pre></div>
 <figure><a href="assets/article-architecture.png" target="_blank"><img src="assets/article-architecture.png" alt="Схема компонентов kubevirt-manager" width="1800" height="980" loading="lazy"></a><figcaption>Схема компонентов kubevirt-manager</figcaption></figure>
-<h2 id="pochemu-ne-prosto-dat-kubectl">Почему не просто дать kubectl<a class="heading-anchor" href="#pochemu-ne-prosto-dat-kubectl" aria-label="Ссылка на раздел «Почему не просто дать kubectl»">#</a></h2>
-<p>Внутри команды платформы <code>kubectl get vm</code>, <code>virtctl console</code>, <code>kubectl patch vm</code> и <code>kubectl edit svc</code> выглядят нормально. Для dev cloud это плохой интерфейс по нескольким причинам.</p>
-<p>Во-первых, сложно выдать ровно те права, которые нужны пользователю. Если человек может править <code>VirtualMachine</code>, он почти наверняка может сделать больше, чем планировалось в продуктовой модели.</p>
-<p>Во-вторых, KubeVirt-операции имеют разную семантику. <code>Start</code>, <code>Stop</code>, <code>Restart</code>, <code>Migrate</code>, изменение template spec и доступ к serial console — это разные API и subresource. В UI можно сделать каждую операцию явной, подписанной и проверяемой.</p>
-<p>В-третьих, пользователю нужна не CRD-модель, а эксплуатационный срез: &quot;моя ВМ включена?&quot;, &quot;куда подключаться?&quot;, &quot;какие порты открыты?&quot;, &quot;почему resize ещё не закончился?&quot;, &quot;есть ли guest-agent?&quot;, &quot;на какой ноде она сейчас?&quot;.</p>
-<p>В-четвёртых, любые долгие операции должны блокировать повторные действия. Если кнопка не поменялась после клика, человек закономерно нажмёт ещё раз. Для Kubernetes это быстро превращается в конфликты <code>resourceVersion</code>, повторные start/stop и недоверие к панели.</p>
-<h2 id="model-dannyh">Модель данных<a class="heading-anchor" href="#model-dannyh" aria-label="Ссылка на раздел «Модель данных»">#</a></h2>
-<p>У каждой ВМ есть два имени, которые важно не путать:</p>
-<ul><li>имя объекта <code>VirtualMachine</code>;</li><li>имя сервиса, которое кладётся в label <code>kubevirt.io/domain</code> и используется как selector для <code>Service</code>.</li></ul>
-<p>Изначально это легко смешать, особенно когда в UI показывается FQDN вида <code>name.default.dev.example.net</code>, а API управления портами должен получить bare-name сервиса. В результате пользователь видит сервис, но add/remove port может идти не туда или падать на нормализации имени.</p>
-<p>Текущая модель в панели делает это явным:</p>
-<div class="code-block"><div class="code-label">text</div><pre><code class="language-text">VMInfo.Name       -&gt; имя VirtualMachine
-VMInfo.Server     -&gt; bare-имя сервиса / kubevirt.io/domain
-VMInfo.DomainName -&gt; отображаемый DNS/FQDN
-VMInfo.SvcName    -&gt; найденный Kubernetes Service</code></pre></div>
-<p>Для пользователя это одна ВМ. Для кода это разные поля с разной ответственностью.</p>
-<h2 id="komandy-vladelcy-i-byudzhety">Команды, владельцы и бюджеты<a class="heading-anchor" href="#komandy-vladelcy-i-byudzhety" aria-label="Ссылка на раздел «Команды, владельцы и бюджеты»">#</a></h2>
-<p>Команда в таком сервисе — это не просто строка в поле owner. У неё есть три роли:</p>
-<ul><li>группа доступа: кто видит ВМ и может выполнять действия;</li><li>владелец ресурсов: кому относится CPU/RAM/диск конкретной ВМ;</li><li>бюджет: сколько ресурсов команда может использовать в self-service.</li></ul>
-<p>Если забыть про бюджет, портал быстро превращается в удобный способ обойти ручное согласование ресурсов. Пользователь технически может выбрать 12 CPU и 60 Gi RAM, но это ещё не значит, что его команда имеет на это остаток бюджета.</p>
-<p>Здесь важно не смешивать три разных ограничения:</p>
-<ul><li><code>12 CPU / 60 Gi</code> — технический максимум одной ВМ;</li><li>командный бюджет — организационная граница self-service;</li><li>allocatable-ёмкость и переподписка нод — физическое состояние кластера.</li></ul>
-<p>Текущая версия уже закрывает accounting-часть: админская страница считает заявки запущенных ВМ по owner-аннотациям, показывает vCPU/RAM каждой команды и долю от общей ёмкости. Это позволяет сопоставить потребление с согласованным бюджетом, но пока не является hard quota: значения самого бюджета не хранятся в приложении, а create/resize не блокируются по остаткам команды.</p>
-<p>Следующий шаг — сделать бюджет частью данных app-группы:</p>
-<div class="code-block"><div class="code-label">yaml</div><pre><code class="language-yaml">team: platform-dev
-budget:
-  maxVCPU: 48
-  maxMemoryGi: 192
-  maxDiskGi: 1000
-  maxVMs: 20</code></pre></div>
-<p>После этого create и resize смогут считать не только глобальные максимумы поля ввода, но и остаток бюджета команды:</p>
-<div class="code-block"><div class="code-label">text</div><pre><code class="language-text">requested_after_operation &lt;= team_budget - current_team_usage + current_vm_usage</code></pre></div>
-<p>Последнее слагаемое важно для resize: если ВМ уже принадлежит этой команде и сейчас занимает <code>4 vCPU / 8 Gi</code>, то при увеличении до <code>6 vCPU / 16 Gi</code> из бюджета нужно списывать только дельту, а не весь новый размер.</p>
-<p>UI сможет показывать «доступно 10 vCPU и 48 Gi», но решение «можно или нельзя» должен принимать сервер. Проверка только в браузере здесь ничего не гарантирует.</p>
-<h2 id="sozdanie-vm-iz-shablona">Создание ВМ из шаблона<a class="heading-anchor" href="#sozdanie-vm-iz-shablona" aria-label="Ссылка на раздел «Создание ВМ из шаблона»">#</a></h2>
-<p>Создание сделано через заранее подготовленные YAML-манифесты. Пользователь выбирает шаблон, имя ВМ, CPU, память, имя сервиса, SSH public key, persistent disk и группу-владельца. Группа-владелец используется и для доступа, и для последующего accounting ресурсов.</p>
-<p>На сервере процесс выглядит так:</p>
-<ol><li>Прочитать список доступных шаблонов из Kubernetes Secret с label <code>kubevirt-template</code>.</li><li>Найти локальный YAML-манифест под выбранный тип.</li><li>Проверить, что выбранная команда доступна пользователю.</li><li>Проверить серверные лимиты CPU/RAM и входные данные.</li><li>Подставить имя ВМ, CPU, RAM, label <code>kubevirt.io/domain</code>, label шаблона и annotation владельца.</li><li>Создать Secret с SSH public key.</li><li>Создать пустой Secret для root password, который позже можно обновить через UI.</li><li>При необходимости выбрать persistent-вариант шаблона и DataVolume/PVC.</li><li>Применить манифест.</li><li>Создать <code>LoadBalancer Service</code> с дефолтными портами.</li></ol>
-<p>Да, в текущей версии есть спорный момент: манифест применяется через <code>kubectl apply</code> из контейнера. Это рабочий путь, но не лучший контракт для приложения. В production-версии я бы перевёл создание VM на typed Kubernetes API или хотя бы на server-side apply через client-go. Тогда проще валидировать поля, писать тесты и не тащить <code>kubectl</code> внутрь runtime-образа.</p>
-<p>Есть и более важная граница: create уже привязывает ВМ к команде, но пока не останавливает запрос при превышении её операционного бюджета. Администратор увидит перерасход на странице нод, однако для настоящего self-service проверка должна происходить до создания Kubernetes-объектов.</p>
-<h2 id="spisok-vm-i-cena-n-1-zaprosov">Список ВМ и цена N+1 запросов<a class="heading-anchor" href="#spisok-vm-i-cena-n-1-zaprosov" aria-label="Ссылка на раздел «Список ВМ и цена N+1 запросов»">#</a></h2>
-<p>Первая версия списка была привычной и медленной. На каждую ВМ делались дополнительные запросы:</p>
-<ul><li>найти внешний IP через <code>List Services</code> и поиск по selector;</li><li>получить VMI, чтобы узнать ноду, migratable и guest-agent;</li><li>получить PVC для размера диска;</li><li>проверить доступы через список ConfigMap app-групп.</li></ul>
-<p>Для 30-50 ВМ это быстро превращается в сотни вызовов Kubernetes API на один рендер страницы. На глаз это выглядит как &quot;HTML тормозит&quot;, хотя реальная причина в N+1-запросах.</p>
-<p>Решение простое: перед циклом по ВМ один раз получить коллекции и построить lookup-карты.</p>
-<div class="code-block"><div class="code-label">text</div><pre><code class="language-text">VirtualMachines.List()         -&gt; список ВМ
-Services.List()                -&gt; map[kubevirt.io/domain]ServiceInfo
+<p>Отдельной базы данных пока нет. VM, владельцы, сервисы, диски и группы доступа описаны Kubernetes-объектами. Локальная память используется только для короткоживущего состояния выполняющихся операций.</p>
+<p>Формирование HTML на сервере здесь оказалось практичным выбором. Доступы проверяются ещё до построения страницы, а небольшой JS-слой отвечает за фильтры, модальные окна, обновление статуса и WebSocket-консоль. В итоге и интерфейс, и вся серверная логика живут в одном Go-приложении: не понадобились отдельное frontend-приложение, дополнительный API для него и дублирование моделей данных.</p>
+<h2 id="sozdanie-vm-scenariy-vmesto-yaml">Создание VM: сценарий вместо YAML<a class="heading-anchor" href="#sozdanie-vm-scenariy-vmesto-yaml" aria-label="Ссылка на раздел «Создание VM: сценарий вместо YAML»">#</a></h2>
+<p>Пользователь не загружает произвольный YAML и не собирает VM из инфраструктурных деталей. Он выбирает готовый сценарий, который поддерживает платформа.</p>
+<p>Такой шаблон определяет сразу несколько вещей:</p>
+<ul><li>базовый образ и операционную систему;</li><li>постоянный диск для долгоживущего стенда или временный диск из Docker/OCI-образа;</li><li>cloud-init для нужной начальной настройки;</li><li>допустимую сетевую и ресурсную конфигурацию.</li></ul>
+<p>После выбора шаблона остаются только параметры конкретного экземпляра: имя VM, CPU, RAM, SSH public key, размер диска для постоянного варианта и начальные порты. Команду-владельца пользователь не выбирает — сервис определяет её автоматически по данным авторизованной сессии в cookie. Нельзя случайно отнести VM к чужой команде или исказить учёт ресурсов выбором другого владельца.</p>
+<p>После нажатия Create платформа сама подготавливает диск, доступ, сетевой адрес и VM. Пользователь получает готовую машину, а не набор Kubernetes-объектов, которые нужно связывать и проверять вручную.</p>
+<p>Шаблоны стали удобной точкой контроля для платформенной команды. Через них можно добавлять новые образы и сценарии cloud-init, менять инфраструктурные настройки и при этом сохранять для разработчика короткий и предсказуемый путь создания VM.</p>
+<h2 id="set-kak-chast-vm">Сеть как часть VM<a class="heading-anchor" href="#set-kak-chast-vm" aria-label="Ссылка на раздел «Сеть как часть VM»">#</a></h2>
+<p>Созданная VM получает понятную точку входа: IP-адрес, DNS-имя и набор опубликованных портов. Всё это видно в её карточке рядом со статусом и ресурсами.</p>
+<p>Открывать и закрывать порты можно там же. Для пользователя сеть является свойством его VM; устройство Kubernetes Service и права на работу с ним остаются внутри платформы.</p>
+<p>Доступ к сетевым операциям автоматически следует за доступом к самой VM. В результате разработчику не нужны отдельная заявка на каждый порт и широкие права в Kubernetes, а администратору не приходится поддерживать ещё один независимый набор разрешений.</p>
+<h2 id="komandy-dostupy-i-byudzhety">Команды, доступы и бюджеты<a class="heading-anchor" href="#komandy-dostupy-i-byudzhety" aria-label="Ссылка на раздел «Команды, доступы и бюджеты»">#</a></h2>
+<p>Модель доступа строится вокруг команды, а не вокруг отдельных Kubernetes-объектов. Keycloak отвечает на вопрос «кто этот пользователь и в каких командах он состоит», привязка VM — «какие ресурсы ему доступны», а бюджет — «сколько ресурсов команда может использовать».</p>
+<p>После входа сервис автоматически показывает пользователю VM его команд и так же автоматически назначает команду-владельца при создании новой машины. Выбрать произвольного владельца в форме нельзя. Администратор при необходимости может открыть одну VM нескольким командам — например, для общего тестового стенда.</p>
+<p>В результате не приходится вручную заводить отдельные разрешения на диск, сеть, консоль и lifecycle каждой VM. Пользователь работает с цельным объектом в рамках своей команды, а платформа централизованно управляет доступом и учётом ресурсов.</p>
+<p>Считать стоимость VM в рублях нам не требовалось: внутренний dev cloud не является биллинговой системой, а ресурсы не продаются подразделениям. Под тарификацией мы понимали квотирование — каждой команде задаётся бюджет в vCPU и RAM, внутри которого она самостоятельно создаёт и изменяет свои стенды.</p>
+<p>Бюджеты хранятся на уровне прикладных команд. Перед созданием VM сервис сопоставляет запрошенные CPU и RAM с уже занятым бюджетом команды. Если хотя бы один лимит будет превышен, операция останавливается до создания инфраструктурных объектов. Это не просто отчёт для администратора, а реальная граница self-service.</p>
+<p>Такая же проверка срабатывает при увеличении ресурсов, но для resize учитывается только разница между текущей и новой конфигурацией. Если VM уже занимает <code>4 vCPU / 8 Gi</code>, а пользователь увеличивает её до <code>6 vCPU / 16 Gi</code>, дополнительный расход составляет <code>2 vCPU / 8 Gi</code>, а не полный новый размер.</p>
+<p>При этом бюджет команды и свободная ёмкость кластера — разные ограничения. Первый отвечает за справедливое распределение ресурсов между командами, вторая показывает, может ли инфраструктура разместить новые VM прямо сейчас. Даже при достаточном общем запасе отдельная нода может оказаться перегружена.</p>
+<p>Администраторская страница показывает allocatable CPU/RAM, заявку запущенных VM, свободную ёмкость и переподписку для каждой KubeVirt-ноды. Ниже тот же расход агрегируется по командам.</p>
+<figure><a href="assets/ui-real-admin-nodes.png" target="_blank"><img src="assets/ui-real-admin-nodes.png" alt="Админский экран: ёмкость, переподписка нод и потребление по командам" width="1775" height="886" loading="lazy"></a><figcaption>Админский экран: ёмкость, переподписка нод и потребление по командам</figcaption></figure>
+<p>Это позволяет одновременно видеть соблюдение командных квот и состояние самой инфраструктуры. Например, команда может исчерпать свой бюджет при наличии свободной ёмкости в кластере. Возможна и обратная ситуация: суммарный запас ещё есть, но отдельная нода уже переподписана по CPU.</p>
+<h2 id="stranica-vm-kak-rabochee-mesto">Страница VM как рабочее место<a class="heading-anchor" href="#stranica-vm-kak-rabochee-mesto" aria-label="Ссылка на раздел «Страница VM как рабочее место»">#</a></h2>
+<p>Dashboard нужен для быстрого обзора. Detail-страница собирает всё, что требуется для управления и первичной диагностики конкретной VM:</p>
+<ul><li>шаблон, ноду, IP, домен и порты;</li><li>состояние и наличие guest-agent;</li><li>CPU, RAM и network из Prometheus;</li><li>Kubernetes Events;</li><li>логи <code>virt-launcher</code> и гостевой <code>dmesg</code>;</li><li>serial-консоль через WebSocket и xterm.js;</li><li>resize, migration и управление группами;</li><li>установку root-пароля через guest-agent.</li></ul>
+<figure><a href="assets/ui-real-detail.png" target="_blank"><img src="assets/ui-real-detail.png" alt="Карточка ВМ: информация, доступы, guest-agent и метрики" width="1656" height="950" loading="lazy"></a><figcaption>Карточка ВМ: информация, доступы, guest-agent и метрики</figcaption></figure>
+<p>Пользователь может отличить «VM запущена» от «приложение внутри действительно работает», посмотреть, на какой ноде живёт инстанс, и увидеть события вокруг Service или IP announcement.</p>
+<p>Serial-консоль даёт аварийный доступ без установки <code>virtctl</code> на рабочую станцию. Это особенно полезно, когда SSH ещё не поднялся или сетевые настройки внутри гостя повреждены.</p>
+<figure><a href="assets/ui-real-console.png" target="_blank"><img src="assets/ui-real-console.png" alt="События Kubernetes и serial-консоль прямо в браузере" width="1663" height="945" loading="lazy"></a><figcaption>События Kubernetes и serial-консоль прямо в браузере</figcaption></figure>
+<p>В итоге detail-страница становится единой точкой первого разбора. Если информации недостаточно, пользователь уже приходит к инфраструктурной команде не с сообщением «VM не работает», а с конкретным состоянием, событием или графиком.</p>
+<h2 id="chto-potrebovalos-dlya-ekspluatacionnogo-kachestva">Что потребовалось для эксплуатационного качества<a class="heading-anchor" href="#chto-potrebovalos-dlya-ekspluatacionnogo-kachestva" aria-label="Ссылка на раздел «Что потребовалось для эксплуатационного качества»">#</a></h2>
+<p>Основные функции закрыли пользовательский путь, но для настоящего self-service этого недостаточно. Панель должна оставаться быстрой, показывать состояние долгих операций и корректно работать с конкурентной моделью Kubernetes без постоянного участия платформенной команды.</p>
+<h3 id="bystryy-dashboard-bez-zastoyavshegosya-kesha">Быстрый dashboard без застоявшегося кэша<a class="heading-anchor" href="#bystryy-dashboard-bez-zastoyavshegosya-kesha" aria-label="Ссылка на раздел «Быстрый dashboard без застоявшегося кэша»">#</a></h3>
+<p>Первая реализация догружала Service, VMI, PVC и группы доступа отдельно для каждой VM. При 30 VM получалось порядка 120 дополнительных обращений к Kubernetes API на один рендер.</p>
+<p>Вместо раннего перехода на informers приложение делает batch pre-fetch в начале HTTP-запроса:</p>
+<div class="code-block"><div class="code-label">text</div><pre><code class="language-text">VirtualMachines.List()         -&gt; список VM
+Services.List()                -&gt; map[domainLabel]ServiceInfo
 VirtualMachineInstances.List() -&gt; map[vmName]VMI
-PVCs.List()                    -&gt; map[pvcName]diskSize
-ConfigMaps.List()              -&gt; app-группы пользователя</code></pre></div>
-<p>После этого цикл по ВМ ходит только в память. Данные не становятся &quot;кешем&quot; в плохом смысле: это snapshot на один HTTP-запрос. На следующем refresh сервер снова читает актуальное состояние из Kubernetes. Для текущего масштаба это даёт основной выигрыш без сложной инфраструктуры informers.</p>
+PersistentVolumeClaims.List()  -&gt; map[pvcName]diskSize
+Access groups                  -&gt; загружаются один раз</code></pre></div>
+<p>Дальше карточки собираются из lookup-карт в памяти. Это snapshot на один рендер, а не долгоживущий кэш: следующий refresh снова получает актуальные коллекции.</p>
 <figure><a href="assets/dashboard-refresh-flow.png" target="_blank"><img src="assets/dashboard-refresh-flow.png" alt="Как рендер списка ушёл от N+1 запросов" width="1800" height="980" loading="lazy"></a><figcaption>Как рендер списка ушёл от N+1 запросов</figcaption></figure>
-<p>Следующий шаг для более крупного масштаба — shared informers. Тогда страница будет читать VM/VMI/Service/PVC/ConfigMap из in-memory cache, который обновляется watch&#39;ами. Это снижает нагрузку на API почти до нуля на рендер и открывает путь к SSE/live dashboard. Но это уже другой уровень сложности: прогрев cache, ожидание sync, обработка stale-состояний и аккуратный fallback при потере watch.</p>
-<h2 id="dolgie-operacii-i-sostoyanie-ui">Долгие операции и состояние UI<a class="heading-anchor" href="#dolgie-operacii-i-sostoyanie-ui" aria-label="Ссылка на раздел «Долгие операции и состояние UI»">#</a></h2>
-<p>Самая заметная UX-проблема проявилась не в HTML и не в CSS. Пользователь нажимает &quot;resize&quot;, backend останавливает ВМ, меняет ресурсы и запускает её снова. Операция длится десятки секунд или минуты. Если страница визуально не меняется, кнопку можно нажать ещё раз, потом ещё раз, потом получить конфликт <code>the object has been modified</code> или <code>VM is already running</code>.</p>
-<p>Для этого появился маленький async-слой:</p>
+<p>Для текущих десятков VM этого достаточно. При росте масштаба следующим шагом будут shared informers и SSE, но основную проблему сначала стоило решить более простым способом.</p>
+<h3 id="vidimoe-sostoyanie-dolgih-operaciy">Видимое состояние долгих операций<a class="heading-anchor" href="#vidimoe-sostoyanie-dolgih-operaciy" aria-label="Ссылка на раздел «Видимое состояние долгих операций»">#</a></h3>
+<p>Resize запущенной VM включает stop, ожидание состояния <code>Stopped</code>, обновление template spec, start и ожидание <code>Running</code>. Пользователь не должен всё это время смотреть на активную кнопку и гадать, принят ли запрос.</p>
+<p>Для таких действий появился небольшой async-слой:</p>
 <div class="code-block"><div class="code-label">text</div><pre><code class="language-text">POST /resize/{vm}
-  |
-  +--&gt; проверка доступа, лимитов CPU/RAM и busy-state
-  |
-  +--&gt; tryNewOp(vm, &quot;resize&quot;)
-  |
-  +--&gt; goroutine runResize(...)
-  |
-  +--&gt; HTTP 200 {&quot;ok&quot;: true}
+  -&gt; auth + validation + busy check
+  -&gt; register operation
+  -&gt; run in background
 
 GET /op-status/{vm}
-  |
-  +--&gt; phase, done, error, log[]</code></pre></div>
-<p>Операция хранится в map по имени ВМ. Если по этой ВМ уже есть активная операция, новый resize получает <code>409 Conflict</code>. UI открывает overlay, показывает фазы <code>stopping</code>, <code>applying</code>, <code>starting</code>, <code>done</code> и live-log. Если операция завершилась успешно, страница перезагружается и пользователь видит уже новое состояние.</p>
-<p>Для start/stop/restart/migrate используется тот же принцип на уровне состояния: пока VM находится в <code>Starting</code>, <code>Stopping</code>, <code>Migrating</code>, <code>Provisioning</code> или <code>Terminating</code>, опасные действия блокируются.</p>
-<p>Это не distributed workflow engine. При рестарте самого <code>kubevirt-manager</code> локальный log операции потеряется. Но для внутренней панели на одну replica этого достаточно, а Kubernetes всё равно остаётся источником истины по состоянию VM.</p>
-<h2 id="resize-cpu-ram">Resize CPU/RAM<a class="heading-anchor" href="#resize-cpu-ram" aria-label="Ссылка на раздел «Resize CPU/RAM»">#</a></h2>
-<p>Resize ограничен серверной валидацией:</p>
-<ul><li>CPU: 1-12 cores;</li><li>RAM: 1-60 Gi.</li></ul>
-<p>Если ВМ была запущена, панель явно предупреждает, что будет downtime: VM остановится, template spec обновится, затем VM запустится снова. Это честнее, чем прятать рестарт за красивой кнопкой &quot;Apply&quot;.</p>
-<p>Сама операция идёт так:</p>
-<ol><li>Запомнить, была ли VM running.</li><li>Если running — вызвать KubeVirt <code>Stop</code>.</li><li>Дождаться <code>Stopped</code>.</li><li>Получить свежую версию VM.</li><li>Изменить <code>Spec.Template.Spec.Domain.CPU.Cores</code>.</li><li>Изменить memory request.</li><li>Выполнить <code>Update</code>.</li><li>Если VM была running — вызвать <code>Start</code>.</li><li>Дождаться <code>Running</code>.</li></ol>
-<p>Отдельный урок здесь — нельзя считать успешным сам вызов <code>Start</code>. Он означает, что команда принята, а не то, что ВМ уже поднялась. Поэтому UI должен ждать конечное состояние.</p>
-<p>Как и при create, текущая проверка ограничивает размер отдельной ВМ, но ещё не остаток бюджета команды. Для resize серверному budget gate нужно учитывать только дельту: существующие ресурсы этой ВМ уже входят в потребление владельца.</p>
-<h2 id="porty-kak-chast-self-service">Порты как часть self-service<a class="heading-anchor" href="#porty-kak-chast-self-service" aria-label="Ссылка на раздел «Порты как часть self-service»">#</a></h2>
-<p>Для каждой ВМ создаётся <code>LoadBalancer Service</code>, который выбирает workload по label <code>kubevirt.io/domain</code>. Открытие порта — это добавление <code>ServicePort</code> в этот сервис.</p>
-<p>Пользовательский сценарий выглядит просто:</p>
-<ol><li>Открыть модалку портов у ВМ.</li><li>Указать порт и имя, например <code>http</code> / <code>8080</code>.</li><li>Отправить POST.</li><li>Backend проверит доступ к связанной ВМ и обновит Service.</li></ol>
-<p>Тонкость в доступах: пользователь управляет не сервисом как отдельным объектом Kubernetes, а сетью конкретной ВМ. Поэтому <code>authorizeService</code> ищет VM, у которой <code>kubevirt.io/domain</code> совпадает с именем сервиса, и проверяет owner этой VM.</p>
-<p>Это закрывает типичный баг: пользователь не должен иметь возможность открыть порт у чужой ВМ, даже если он угадал имя сервиса.</p>
-<h2 id="konsol-logi-i-metriki">Консоль, логи и метрики<a class="heading-anchor" href="#konsol-logi-i-metriki" aria-label="Ссылка на раздел «Консоль, логи и метрики»">#</a></h2>
-<p>Страница конкретной VM — это не только кнопки.</p>
-<p>Serial console работает через WebSocket:</p>
-<div class="code-block"><div class="code-label">text</div><pre><code class="language-text">browser xterm.js
-  |
-  v
-/console/{vm}
-  |
-  v
-KubeVirt VirtualMachineInstance.SerialConsole</code></pre></div>
-<p>Для логов панель находит <code>virt-launcher</code> pod и отдаёт:</p>
-<ul><li>container logs <code>compute</code>;</li><li>guest console log / <code>dmesg</code>, если есть соответствующий контейнер.</li></ul>
-<p>Метрики подтягиваются через Prometheus HTTP API и рисуются <code>uPlot</code>:</p>
-<ul><li>CPU;</li><li>memory;</li><li>network RX/TX.</li></ul>
-<p>Это превращает VM-detail страницу в нормальную точку первичной диагностики. Пользователь может увидеть, что VM не просто &quot;Running&quot;, а на какой ноде она живёт, подключён ли guest-agent, что видно в событиях, что происходит с ресурсами и можно ли открыть serial console.</p>
-<h2 id="dostupy-keycloak-app-gruppy-i-byudzhety">Доступы: Keycloak, app-группы и бюджеты<a class="heading-anchor" href="#dostupy-keycloak-app-gruppy-i-byudzhety" aria-label="Ссылка на раздел «Доступы: Keycloak, app-группы и бюджеты»">#</a></h2>
-<p>Авторизация опциональная. Если <code>KEYCLOAK_AUTH != true</code>, приложение работает как раньше: без пользовательских ограничений. Если Keycloak включён, middleware делает OIDC login, кладёт пользователя и группы в session cookie и дальше все handler&#39;ы проверяют доступ.</p>
-<p>Важная часть — app-группы. Не хочется привязывать VM напрямую к сырым Keycloak group paths, потому что они могут меняться и не всегда удобны в UI. Поэтому в Kubernetes ConfigMap хранится соответствие группы доступа, описания, Keycloak-групп и, в развитой модели, бюджета:</p>
-<div class="code-block"><div class="code-label">text</div><pre><code class="language-text">app group: platform-dev
-description: Dev/stage виртуалки платформы
-kcGroups:
-  /infra/platform
-  /devops/kubevirt-users
-budget:
-  maxVCPU: 48
-  maxMemoryGi: 192
-  maxDiskGi: 1000
-  maxVMs: 20</code></pre></div>
-<p>VM получает annotation:</p>
-<div class="code-block"><div class="code-label">yaml</div><pre><code class="language-yaml">kubevirt-manager/groups: platform-dev,qa-lab</code></pre></div>
-<p>Пользователь видит VM, если хотя бы одна из его Keycloak-групп попадает в app-группу, указанную в annotation. Админ видит всё и может управлять группами через отдельную страницу. При создании и resize та же app-группа должна использоваться для проверки бюджета, иначе доступы и ресурсная ответственность начинают жить раздельно.</p>
-<p>Плюс этой модели — правила доступа и ресурсные границы лежат рядом с Kubernetes-объектами и не требуют отдельной базы данных. Минус — ConfigMap не является полноценной IAM/billing-системой, поэтому для большого количества команд понадобится более строгая модель владения, аудит изменений бюджета и понятная история &quot;кто увеличил лимит&quot;.</p>
-<h2 id="ui-inzhenernyy-no-ne-bezrazlichnyy">UI: инженерный, но не безразличный<a class="heading-anchor" href="#ui-inzhenernyy-no-ne-bezrazlichnyy" aria-label="Ссылка на раздел «UI: инженерный, но не безразличный»">#</a></h2>
-<p>Пользователи здесь технические, поэтому интерфейс не должен превращаться в &quot;мастер из пяти шагов&quot;, где каждое поле объясняется как впервые. Но инженерный UI всё равно обязан быть предсказуемым.</p>
-<p>Что оказалось важным:</p>
-<ul><li>плотная таблица и карточки, чтобы быстро сканировать 30+ ВМ;</li><li>фильтр Running/Stopped и поиск по имени, IP, ноде, домену;</li><li>явные disabled-состояния во время переходных статусов;</li><li>loading overlay для обычных POST-действий;</li><li>live overlay для async resize;</li><li>предупреждение о downtime перед изменением CPU/RAM;</li><li>отдельная detail-страница для тяжёлых вещей: console, logs, metrics, resize, delete.</li></ul>
-<p>Субъективно &quot;красивость&quot; тут вторична. Если после клика непонятно, ушёл ли запрос, UI плохой. Если пользователь может три раза подряд нажать опасную кнопку, UI плохой. Если список обновляется 30 секунд и нельзя понять, живо ли приложение, UI плохой.</p>
-<h2 id="chto-esche-nuzhno-dozhat">Что ещё нужно дожать<a class="heading-anchor" href="#chto-esche-nuzhno-dozhat" aria-label="Ссылка на раздел «Что ещё нужно дожать»">#</a></h2>
-<p>Проект уже полезен, но я бы не называл текущую версию финальной. Самые важные вещи для следующего прохода:</p>
-<div class="table-wrap"><table><thead><tr><th>Область</th><th>Что поменять</th><th>Зачем</th></tr></thead><tbody><tr><td>HTTP methods</td><td>Все mutating handler&#39;ы должны принимать только POST</td><td>Не допускать случайные и cross-site GET-мутации</td></tr><tr><td>CSRF</td><td>Добавить полноценный CSRF token, не только Origin-check</td><td>Session cookie + browser UI требуют нормальной защиты</td></tr><tr><td>Ports</td><td>Валидировать порт 1-65535 и имя <code>ServicePort</code> до Kubernetes API</td><td>Пользователь должен получать понятный 400, а не generic 500</td></tr><tr><td>Service update</td><td>Делать retry on conflict для add/remove port</td><td>Конкурентные правки Service не должны ломать UX</td></tr><tr><td>Team budgets</td><td>Сделать бюджет команды hard gate для create/resize</td><td>Self-service не должен обходить ресурсные договорённости команды</td></tr><tr><td>Create VM</td><td>Перевести <code>kubectl apply</code> на client-go/server-side apply</td><td>Меньше runtime-зависимостей, проще тестировать</td></tr><tr><td>Templates</td><td>Описать template metadata и дефолтные порты явно</td><td>Сейчас часть поведения зашита в Go-код</td></tr><tr><td>Namespace</td><td>Убрать жёсткий <code>default</code></td><td>Для multi-team окружения нужен namespace scope</td></tr><tr><td>Cache</td><td>Перейти на informers при росте количества VM</td><td>Снизить нагрузку и сделать live dashboard</td></tr><tr><td>Tests</td><td>Добавить fake-client tests на auth, ports, resize state machine</td><td>Сейчас часть регресса ловится глазами</td></tr><tr><td>Secrets</td><td>SESSION_SECRET и Keycloak secret только через Kubernetes Secret</td><td>Не оставлять опасные дефолты в манифесте</td></tr></tbody></table></div>
-<p>Этот список может выглядеть как критика собственного проекта, но для внутреннего инструмента это нормальная траектория: сначала закрыть реальный процесс, потом постепенно убрать sharp edges, которые всплыли при эксплуатации.</p>
-<h2 id="pochemu-eto-polezno-imenno-vokrug-kubevirt">Почему это полезно именно вокруг KubeVirt<a class="heading-anchor" href="#pochemu-eto-polezno-imenno-vokrug-kubevirt" aria-label="Ссылка на раздел «Почему это полезно именно вокруг KubeVirt»">#</a></h2>
-<p>KubeVirt даёт Kubernetes-native модель виртуалок. Но для конечного пользователя это не всегда плюс. CRD, DataVolume, VMI, launcher pod, Service, PVC, Secret, guest-agent и subresources — всё это правильные строительные блоки, но не продуктовый интерфейс.</p>
-<p>Панель решает не техническую проблему &quot;как вызвать API&quot;, а организационную: как дать разработчикам ограниченный self-service в дев-контуре, не превращая production-виртуализацию в склад временных стендов и не делая каждого пользователя администратором кластера.</p>
-<p>Хороший слой над KubeVirt должен:</p>
-<ul><li>показывать VM как цельный объект, а не набор CRD;</li><li>честно отображать переходные состояния;</li><li>давать операции ровно в том объёме, который поддерживает платформа;</li><li>учитывать бюджет команды до изменения Kubernetes-объектов;</li><li>оставлять эксперименты внутри dev-контура, без влияния на production-виртуализацию;</li><li>скрывать лишний YAML, но не скрывать важные инженерные факты;</li><li>держать доступы ближе к владельцам и командам;</li><li>не делать Kubernetes API bottleneck&#39;ом при каждом refresh.</li></ul>
-<h2 id="vyvody">Выводы<a class="heading-anchor" href="#vyvody" aria-label="Ссылка на раздел «Выводы»">#</a></h2>
-<p>Самая сложная часть такого сервиса оказалась не в KubeVirt API. Start, stop, console и service update вполне понятны. Сложнее другое:</p>
-<ul><li>не превратить страницу списка в сотни API-вызовов;</li><li>не дать пользователю выполнять одно и то же действие несколько раз, пока backend работает;</li><li>не смешать имя VM, имя сервиса и отображаемый домен;</li><li>объяснить downtime перед resize;</li><li>не путать видимый accounting команд с hard quota и довести budget gate до backend;</li><li>удержать разработческие ВМ в отдельном dev cloud, а не размазывать их по production-виртуализации;</li><li>сделать доступы достаточно простыми для эксплуатации и достаточно строгими для безопасности;</li><li>оставить пользователю техническую информацию, но убрать необходимость помнить YAML.</li></ul>
-<p>Для меня главный критерий здесь простой: если разработчик может сам создать VM в dev cloud, открыть нужный порт, посмотреть консоль и понять состояние операции без доступа к <code>kubectl</code> и без заявки в production-виртуализацию, панель уже выполняет свою работу. Администратор при этом видит реальную ёмкость, переподписку и потребление команд. Дальше начинается обычная инженерия продукта: тесты, права, валидация, informers, бюджетные hard gates и спокойная полировка UX.</p>
+  -&gt; phase + done + error + log</code></pre></div>
+<p>UI показывает фазы <code>queued</code>, <code>stopping</code>, <code>applying</code>, <code>starting</code>, <code>done</code>, блокирует несовместимые действия и не позволяет запустить второй resize для той же VM. В результате длительность операции остаётся технической реальностью, но перестаёт быть неопределённостью для пользователя.</p>
+<h3 id="sostoyanie-kubernetes-nuzhno-perechityvat">Состояние Kubernetes нужно перечитывать<a class="heading-anchor" href="#sostoyanie-kubernetes-nuzhno-perechityvat" aria-label="Ссылка на раздел «Состояние Kubernetes нужно перечитывать»">#</a></h3>
+<p>После stop контроллеры изменяют VM, поэтому обновлять объект, полученный до начала операции, нельзя: его <code>resourceVersion</code> уже может устареть. Перед <code>Update</code> backend повторно получает VM, а после <code>Start</code> ждёт фактического <code>PrintableStatus=Running</code>.</p>
+<p>Та же логика нужна для конкурентных изменений Service: свежий <code>Get</code>, ограниченный <code>RetryOnConflict</code> и идемпотентная трактовка уже достигнутого состояния.</p>
+<p>Именно этот слой отличает демонстрационный UI от инструмента, которому можно доверить повседневный self-service.</p>
+<h2 id="kuda-razvivat-dalshe">Куда развивать дальше<a class="heading-anchor" href="#kuda-razvivat-dalshe" aria-label="Ссылка на раздел «Куда развивать дальше»">#</a></h2>
+<p>Следующий этап проекта связан уже не с добавлением ещё нескольких кнопок, а с масштабированием правил и эксплуатации:</p>
+<div class="table-wrap"><table><thead><tr><th>Направление</th><th>Развитие</th></tr></thead><tbody><tr><td>Kubernetes API</td><td>заменить runtime-вызов <code>kubectl</code> на server-side apply через client-go</td></tr><tr><td>live-состояние</td><td>перейти от snapshot на запрос к informers и SSE</td></tr><tr><td>несколько replica</td><td>вынести координацию операций из локальной памяти</td></tr><tr><td>безопасность</td><td>добавить CSRF tokens, расширенный аудит и управление секретами</td></tr><tr><td>надёжность</td><td>покрыть auth, ports и resize state machine fake-клиентами</td></tr></tbody></table></div>
+<p>Ещё одно ограничение – фиксированный namespace. Для одного dev-контура это упрощает модель, но multi-environment установка потребует явного namespace scope.</p>
+<p>Текущая архитектура не мешает этим изменениям: Kubernetes остаётся source of truth, а пользовательские сценарии уже отделены от конкретных API-вызовов.</p>
+<h2 id="chto-izmenilos-v-processe">Что изменилось в процессе<a class="heading-anchor" href="#chto-izmenilos-v-processe" aria-label="Ссылка на раздел «Что изменилось в процессе»">#</a></h2>
+<p>До появления панели разработчику требовался инфраструктурный инженер почти на каждом этапе жизни VM. Теперь типовой путь выглядит так:</p>
+<div class="code-block"><div class="code-label">text</div><pre><code class="language-text">выбрать шаблон
+  -&gt; создать VM с привязкой к команде
+  -&gt; получить IP и открыть порты
+  -&gt; управлять lifecycle и ресурсами
+  -&gt; смотреть Events, метрики и console
+  -&gt; удалить ненужный стенд</code></pre></div>
+<p>Для разработчика это свобода внутри понятных ограничений. Для инфраструктурной команды – меньше ручных операций, единая модель доступа и видимость того, куда расходуются ресурсы.</p>
+<p>KubeVirt здесь дал строительные блоки, но ценность появилась на слое выше: когда VM стала цельным пользовательским объектом, а технические возможности превратились в поддерживаемые сценарии.</p>
+<p>Если в компании ещё нет собственного cloud для разработки, начинать необязательно с большого портала и каталога услуг. Несколько проверенных шаблонов, понятные бюджеты, OIDC и ограниченный UI уже могут убрать очередь ручных заявок и дать командам пространство для экспериментов, не затрагивая production-контур.</p>
 <h2 id="materialy">Материалы<a class="heading-anchor" href="#materialy" aria-label="Ссылка на раздел «Материалы»">#</a></h2>
 <ul><li>Репозиторий проекта: добавить публичную ссылку на GitHub после публикации.</li><li>KubeVirt: https://kubevirt.io/</li><li>Kubernetes client-go: https://github.com/kubernetes/client-go</li><li>KubeVirt client-go: https://github.com/kubevirt/client-go</li><li>xterm.js: https://xtermjs.org/</li><li>uPlot: https://github.com/leeoniya/uPlot</li></ul>
       </article>
