@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1040" viewBox="0 0 1800 1040" role="img" aria-labelledby="title desc">
+  <title id="title">Архитектура operational dashboard</title>
+  <desc id="desc">Grafana отправляет webhook в Go-сервис. Сервис ведёт состояние алертов, синхронизирует Mattermost и web dashboard через REST и SSE, восстанавливает состояние после рестарта и опционально вызывает LLM и MCP для обогащения.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L12,6 L0,12 z" fill="#36556f"/>
+    </marker>
+    <marker id="arrow-green" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L12,6 L0,12 z" fill="#18825f"/>
+    </marker>
+    <style>
+      .canvas { fill: #f2f5f7; }
+      .panel { fill: #ffffff; stroke: #cbd7e2; stroke-width: 2; }
+      .panel-blue { fill: #edf5fb; stroke: #1d6fba; stroke-width: 2; }
+      .panel-green { fill: #edf8f3; stroke: #18825f; stroke-width: 2; }
+      .panel-amber { fill: #fff8e8; stroke: #b7791f; stroke-width: 2; }
+      .panel-dark { fill: #10202f; stroke: #10202f; stroke-width: 2; }
+      .line { fill: none; stroke: #36556f; stroke-width: 3; marker-end: url(#arrow); }
+      .line-green { fill: none; stroke: #18825f; stroke-width: 3; marker-end: url(#arrow-green); }
+      .line-dashed { fill: none; stroke: #667383; stroke-width: 3; stroke-dasharray: 12 10; marker-end: url(#arrow); }
+      .title { fill: #10202f; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 42px; font-weight: 760; }
+      .subtitle { fill: #667383; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 22px; }
+      .h { fill: #10202f; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 27px; font-weight: 760; }
+      .h-light { fill: #ffffff; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 27px; font-weight: 760; }
+      .body { fill: #314254; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 20px; }
+      .body-light { fill: #dce7f0; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 20px; }
+      .small { fill: #667383; font-family: "SFMono-Regular", Consolas, monospace; font-size: 17px; }
+      .tag { fill: #1d6fba; font-family: "SFMono-Regular", Consolas, monospace; font-size: 16px; font-weight: 700; }
+      .label { fill: #36556f; font-family: "SFMono-Regular", Consolas, monospace; font-size: 16px; font-weight: 700; }
+    </style>
+  </defs>
+
+  <rect class="canvas" width="1800" height="1040"/>
+  <text class="title" x="90" y="82">Один operational state, два интерфейса</text>
+  <text class="subtitle" x="90" y="120">Grafana остаётся источником состояния, Mattermost — журналом, web UI — рабочим экраном дежурного.</text>
+
+  <rect class="panel-blue" x="80" y="205" width="350" height="225" rx="8"/>
+  <text class="h" x="115" y="258">Grafana / Alertmanager</text>
+  <text class="body" x="115" y="303">firing / resolved</text>
+  <text class="body" x="115" y="338">labels, annotations, links</text>
+  <text class="body" x="115" y="373">fingerprint и timestamps</text>
+  <text class="small" x="115" y="405">Bearer-authenticated webhook</text>
+
+  <rect class="panel-dark" x="620" y="175" width="560" height="410" rx="8"/>
+  <text class="h-light" x="660" y="230">Go alert manager</text>
+  <text class="tag" x="660" y="269">DETERMINISTIC CORE</text>
+
+  <rect x="660" y="300" width="220" height="104" rx="6" fill="#193247" stroke="#375a73" stroke-width="2"/>
+  <text class="body-light" x="684" y="336">Record state machine</text>
+  <text class="small" x="684" y="370" fill="#b9cad8">fired → ack → ETA</text>
+  <text class="small" x="684" y="394" fill="#b9cad8">→ resolved / refire</text>
+
+  <rect x="920" y="300" width="220" height="104" rx="6" fill="#193247" stroke="#375a73" stroke-width="2"/>
+  <text class="body-light" x="944" y="336">Grouping</text>
+  <text class="small" x="944" y="370" fill="#b9cad8">rule + site + cluster</text>
+  <text class="small" x="944" y="394" fill="#b9cad8">+ namespace + folder</text>
+
+  <rect x="660" y="438" width="220" height="104" rx="6" fill="#193247" stroke="#375a73" stroke-width="2"/>
+  <text class="body-light" x="684" y="474">Concurrency</text>
+  <text class="small" x="684" y="508" fill="#b9cad8">per-fingerprint locks</text>
+  <text class="small" x="684" y="532" fill="#b9cad8">atomic ack / updates</text>
+
+  <rect x="920" y="438" width="220" height="104" rx="6" fill="#193247" stroke="#375a73" stroke-width="2"/>
+  <text class="body-light" x="944" y="474">Policy</text>
+  <text class="small" x="944" y="508" fill="#b9cad8">retention, maintenance</text>
+  <text class="small" x="944" y="532" fill="#b9cad8">auth, rate limits</text>
+
+  <rect class="panel-green" x="1360" y="165" width="360" height="250" rx="8"/>
+  <text class="h" x="1397" y="218">Web dashboard</text>
+  <text class="body" x="1397" y="262">карточки, группы, фильтры</text>
+  <text class="body" x="1397" y="297">владелец, ETA, история</text>
+  <text class="body" x="1397" y="332">инциденты и аналитика</text>
+  <text class="small" x="1397" y="380">REST actions + SSE updates</text>
+
+  <rect class="panel" x="1360" y="500" width="360" height="250" rx="8"/>
+  <text class="h" x="1397" y="553">Mattermost</text>
+  <text class="body" x="1397" y="597">root card + alert thread</text>
+  <text class="body" x="1397" y="632">комментарии и обсуждение</text>
+  <text class="body" x="1397" y="667">props для восстановления</text>
+  <text class="small" x="1397" y="715">операционный журнал</text>
+
+  <rect class="panel-amber" x="620" y="710" width="560" height="220" rx="8"/>
+  <text class="h" x="660" y="762">Опциональный AI-контур</text>
+  <text class="tag" x="660" y="800" fill="#9a5d13">LLM + MCP</text>
+  <text class="body" x="660" y="840">автообогащение профильными проверками</text>
+  <text class="body" x="660" y="875">«в прошлый раз», сводка, postmortem</text>
+  <text class="small" x="660" y="907">не меняет operational state</text>
+
+  <rect class="panel" x="80" y="700" width="350" height="230" rx="8"/>
+  <text class="h" x="115" y="753">Восстановление</text>
+  <text class="body" x="115" y="797">live snapshot Grafana</text>
+  <text class="body" x="115" y="832">скан карточек Mattermost</text>
+  <text class="body" x="115" y="867">слияние без перезаписи</text>
+  <text class="small" x="115" y="907">startup: fast path + background</text>
+
+  <path class="line" d="M430 317 H600"/>
+  <text class="label" x="458" y="298">POST /grafana-webhook</text>
+
+  <path class="line-green" d="M1180 265 H1338"/>
+  <text class="label" x="1210" y="246">SSE / JSON</text>
+  <path class="line" d="M1360 365 H1218 V390 H1190"/>
+  <text class="label" x="1226" y="414">ack / ETA / close</text>
+
+  <path class="line" d="M1180 500 H1260 V625 H1338"/>
+  <text class="label" x="1208" y="480">create / edit / reply</text>
+  <path class="line" d="M1360 690 H1268 V555 H1190"/>
+  <text class="label" x="1232" y="716">thread actions</text>
+
+  <path class="line-dashed" d="M900 585 V690"/>
+  <text class="label" x="920" y="648">evidence / thread</text>
+  <path class="line-dashed" d="M1180 820 H1270 V730 H1338"/>
+  <text class="label" x="1202" y="845">summary / enrichment</text>
+
+  <path class="line" d="M430 814 H560 V560 H610"/>
+  <text class="label" x="450" y="790">restore on restart</text>
+
+  <line x1="90" y1="990" x2="130" y2="990" stroke="#36556f" stroke-width="3"/>
+  <text class="small" x="145" y="997">детерминированный путь</text>
+  <line x1="430" y1="990" x2="470" y2="990" stroke="#667383" stroke-width="3" stroke-dasharray="10 8"/>
+  <text class="small" x="485" y="997">необязательное AI-обогащение</text>
+</svg>

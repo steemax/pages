@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>От firing до postmortem: рабочее место дежурного поверх Grafana и Mattermost</title>
+  <meta name="description" content="Как Go-сервис превращает поток firing/resolved в управляемые кейсы с владельцем, ETA, общим тредом, восстановлением после рестарта, постмортемами и аналитикой.">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#10202f">
+  <meta property="og:type" content="article">
+  <meta property="og:locale" content="ru_RU">
+  <meta property="og:title" content="От firing до postmortem: рабочее место дежурного поверх Grafana и Mattermost">
+  <meta property="og:description" content="Почему мало доставить алерт в чат и как собрать вокруг него управляемый operational workflow.">
+  <meta property="og:image" content="assets/article-cover-review.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><rect width=%2264%22 height=%2264%22 rx=%228%22 fill=%22%2310202f%22/><text x=%2232%22 y=%2241%22 text-anchor=%22middle%22 font-family=%22monospace%22 font-size=%2224%22 fill=%22%23ffffff%22>OP</text></svg>">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="reading-progress" aria-hidden="true"><span></span></div>
+  <header class="site-header">
+    <a class="site-mark" href="#top" aria-label="В начало статьи">OPS DASHBOARD</a>
+    <div class="site-meta">
+      <a class="site-home-link" href="../../">Все статьи</a>
+      <span>Go · Grafana · Mattermost</span>
+      <span>12 минут</span>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero" aria-labelledby="article-title">
+      <h1 id="article-title" class="sr-only">От firing до postmortem: рабочее место дежурного поверх Grafana и Mattermost</h1>
+      <img src="assets/article-cover-review.png" alt="Рабочее место дежурного поверх Grafana и Mattermost" width="780" height="440">
+      <div class="hero-caption">
+        <span>Alerts · ownership · ETA · incidents · analytics</span>
+        <span>Черновик для ревью</span>
+      </div>
+    </section>
+
+    <details class="mobile-toc">
+      <summary>Оглавление</summary>
+      <nav aria-label="Оглавление статьи">
+        <ul class="toc-list">
+          <li><a href="#chto-poluchilos" data-section="chto-poluchilos">Что получилось</a></li>
+          <li><a href="#pochemu-grafana-i-chat-po-otdelnosti-ne-hvataet" data-section="pochemu-grafana-i-chat-po-otdelnosti-ne-hvataet">Почему Grafana и чата по отдельности не хватает</a></li>
+          <li><a href="#arhitektura" data-section="arhitektura">Архитектура</a></li>
+          <li><a href="#zhiznennyy-cikl-alerta" data-section="zhiznennyy-cikl-alerta">Жизненный цикл алерта</a></li>
+          <li><a href="#odin-sluchay-vmesto-sotni-soobscheniy" data-section="odin-sluchay-vmesto-sotni-soobscheniy">Один случай вместо сотни сообщений</a></li>
+          <li><a href="#mattermost-kak-operacionnyy-zhurnal" data-section="mattermost-kak-operacionnyy-zhurnal">Mattermost как операционный журнал</a></li>
+          <li><a href="#incidenty-i-postmortem" data-section="incidenty-i-postmortem">Инциденты и postmortem</a></li>
+          <li><a href="#analitika-nuzhno-schitat-keysy" data-section="analitika-nuzhno-schitat-keysy">В аналитике нужно считать кейсы</a></li>
+          <li><a href="#chto-potrebovalos-dlya-ekspluatacionnogo-kachestva" data-section="chto-potrebovalos-dlya-ekspluatacionnogo-kachestva">Что потребовалось для эксплуатационного качества</a>
+            <ul class="toc-sublist">
+              <li><a href="#live-obnovleniya-bez-polling-shtorma" data-section="live-obnovleniya-bez-polling-shtorma">Live-обновления без polling-шторма</a></li>
+              <li><a href="#restart-ne-dolzhen-obnulyat-dezhurstvo" data-section="restart-ne-dolzhen-obnulyat-dezhurstvo">Рестарт не должен обнулять дежурство</a></li>
+              <li><a href="#mattermost-mozhet-byt-nedostupen" data-section="mattermost-mozhet-byt-nedostupen">Mattermost может быть недоступен</a></li>
+              <li><a href="#bezopasnost-vnutrennego-instrumenta" data-section="bezopasnost-vnutrennego-instrumenta">Безопасность внутреннего инструмента</a></li>
+            </ul>
+          </li>
+          <li><a href="#gde-zdes-ai-i-pochemu-on-ne-upravlyaet-sostoyaniem" data-section="gde-zdes-ai-i-pochemu-on-ne-upravlyaet-sostoyaniem">Где здесь AI</a></li>
+          <li><a href="#ogranicheniya" data-section="ogranicheniya">Ограничения</a></li>
+          <li><a href="#chto-izmenilos-v-processe" data-section="chto-izmenilos-v-processe">Что меняется в пилоте</a></li>
+          <li><a href="#materialy" data-section="materialy">Материалы</a></li>
+        </ul>
+      </nav>
+    </details>
+
+    <div class="article-layout">
+      <aside class="desktop-toc">
+        <nav aria-label="Оглавление статьи">
+          <p class="toc-title">Оглавление</p>
+          <ul class="toc-list">
+            <li><a href="#chto-poluchilos" data-section="chto-poluchilos">Что получилось</a></li>
+            <li><a href="#pochemu-grafana-i-chat-po-otdelnosti-ne-hvataet" data-section="pochemu-grafana-i-chat-po-otdelnosti-ne-hvataet">Почему Grafana и чата по отдельности не хватает</a></li>
+            <li><a href="#arhitektura" data-section="arhitektura">Архитектура</a></li>
+            <li><a href="#zhiznennyy-cikl-alerta" data-section="zhiznennyy-cikl-alerta">Жизненный цикл алерта</a></li>
+            <li><a href="#odin-sluchay-vmesto-sotni-soobscheniy" data-section="odin-sluchay-vmesto-sotni-soobscheniy">Один случай вместо сотни сообщений</a></li>
+            <li><a href="#mattermost-kak-operacionnyy-zhurnal" data-section="mattermost-kak-operacionnyy-zhurnal">Mattermost как операционный журнал</a></li>
+            <li><a href="#incidenty-i-postmortem" data-section="incidenty-i-postmortem">Инциденты и postmortem</a></li>
+            <li><a href="#analitika-nuzhno-schitat-keysy" data-section="analitika-nuzhno-schitat-keysy">В аналитике нужно считать кейсы</a></li>
+            <li><a href="#chto-potrebovalos-dlya-ekspluatacionnogo-kachestva" data-section="chto-potrebovalos-dlya-ekspluatacionnogo-kachestva">Что потребовалось для эксплуатационного качества</a>
+              <ul class="toc-sublist">
+                <li><a href="#live-obnovleniya-bez-polling-shtorma" data-section="live-obnovleniya-bez-polling-shtorma">Live-обновления без polling-шторма</a></li>
+                <li><a href="#restart-ne-dolzhen-obnulyat-dezhurstvo" data-section="restart-ne-dolzhen-obnulyat-dezhurstvo">Рестарт не должен обнулять дежурство</a></li>
+                <li><a href="#mattermost-mozhet-byt-nedostupen" data-section="mattermost-mozhet-byt-nedostupen">Mattermost может быть недоступен</a></li>
+                <li><a href="#bezopasnost-vnutrennego-instrumenta" data-section="bezopasnost-vnutrennego-instrumenta">Безопасность внутреннего инструмента</a></li>
+              </ul>
+            </li>
+            <li><a href="#gde-zdes-ai-i-pochemu-on-ne-upravlyaet-sostoyaniem" data-section="gde-zdes-ai-i-pochemu-on-ne-upravlyaet-sostoyaniem">Где здесь AI</a></li>
+            <li><a href="#ogranicheniya" data-section="ogranicheniya">Ограничения</a></li>
+            <li><a href="#chto-izmenilos-v-processe" data-section="chto-izmenilos-v-processe">Что меняется в пилоте</a></li>
+            <li><a href="#materialy" data-section="materialy">Материалы</a></li>
+          </ul>
+        </nav>
+      </aside>
+
+      <article class="article-body">
+        <p>Алертинг у нас построен на правилах Grafana. Сами правила описаны в Terraform, хранятся в Git и применяются через CI/CD-пайплайн. Такой подход даёт review, историю изменений и воспроизводимую конфигурацию вместо ручного редактирования правил в интерфейсе.</p>
+
+        <p>Дальше Grafana Alertmanager маршрутизирует уведомления по labels в несколько каналов внутреннего Mattermost. За этими каналами следит дежурная смена. В Grafana также есть отдельная доска, которая выводит активные алерты списком. Она помогла видеть общую картину, но не решила вопрос, что происходит с каждым алертом после доставки.</p>
+
+        <p>Во время всплеска нужное сообщение иногда теряется среди десятков похожих. Некоторые алерты горят неделю, а обновления по ним появляются раз в несколько дней и каждый раз начинаются почти с нуля, как будто сигнал пришёл только что. Дежурные меняются и не всегда помнят, разбирали ли этот алерт раньше, занимается ли им другой инженер и кто сейчас ведёт исправление — инфраструктура или команда разработки. Получается своеобразная карусель: алерт продолжает гореть, люди меняются, а контекст приходится восстанавливать заново.</p>
+
+        <p>Доска в Grafana сделала поток заметнее, но не добавила владельца, ETA, историю работы и передачу между сменами. Поэтому внутри существующего Go-бота появился operational dashboard. Он не заменяет Grafana и Mattermost, а связывает их общим состоянием: <code>firing</code>, владелец, ETA, тред, история повторов, <code>resolved</code>, инцидент и postmortem.</p>
+
+        <figure>
+          <a href="assets/dashboard-alerts-anon.png" target="_blank">
+            <img src="assets/dashboard-alerts-anon.png" alt="Обезличенный главный экран с активными алертами, владельцами, ETA и группами" width="1881" height="836" loading="lazy">
+          </a>
+          <figcaption>Главный экран дежурного: текущие firing-алерты, владелец, ETA, быстрые действия и объединённые группы.</figcaption>
+        </figure>
+
+        <p>Все имена людей, сервисов, команд и площадок на скриншотах заменены. Состояния, числовые показатели и устройство интерфейса сохранены.</p>
+
+        <h2 id="chto-poluchilos">Что получилось<a class="heading-anchor" href="#chto-poluchilos" aria-label="Ссылка на раздел «Что получилось»">#</a></h2>
+
+        <p>Сейчас dashboard проходит пилотную эксплуатацию у нескольких сотрудников и продолжает дорабатываться. Основная концепция уже работает: он закрывает не наблюдаемость как таковую, а операционный слой вокруг неё.</p>
+
+        <ul>
+          <li>Показывает активные, взятые, ожидающие ETA, resolved и вручную закрытые алерты.</li>
+          <li>Объединяет несколько инстансов одного правила в один кейс и один Mattermost-тред.</li>
+          <li>Позволяет взять алерт или группу в работу, назначить ETA, передать другому инженеру и оставить комментарий.</li>
+          <li>Напоминает владельцу и участникам обсуждения о просроченном ETA и выделяет такую карточку в dashboard.</li>
+          <li>Сохраняет историю повторных срабатываний под стабильным <code>ALR-N</code>.</li>
+          <li>Связывает карточку с Grafana, Silence и обсуждением в Mattermost.</li>
+          <li>Поддерживает maintenance windows, чтобы ожидаемый шум не становился очередью инцидентов.</li>
+          <li>Формирует реестр разобранных инцидентов и postmortem из рабочего треда.</li>
+          <li>Предлагает объединить одновременный каскад алертов в один общий разбор, оставляя подтверждение за инженером.</li>
+          <li>Считает MTTA — время до принятия в работу, MTTR — время до устранения, покрытие владельцами и ETA, повторные срабатывания, шумящие группы и временные пики.</li>
+        </ul>
+
+        <p>Рядом находятся реестр инфраструктурных работ и карта сетевых связей. Они не определяют статус алерта, но дают дежурному контекст: не совпал ли всплеск с объявленным обслуживанием и нет ли общего сетевого сбоя.</p>
+
+        <p>Пока рано говорить, что процесс всей дежурной команды уже изменился. Но цель и границы решения определены, а пилот подтверждает основную механику: состояние дежурства можно собрать из разрозненных вкладок и памяти отдельных людей в один интерфейс. Источники при этом не подменяются: текущее состояние алерта сверяется с Grafana, а обсуждение команды и действия инженеров остаются в Mattermost.</p>
+
+        <h2 id="pochemu-grafana-i-chat-po-otdelnosti-ne-hvataet">Почему Grafana и чата по отдельности не хватает<a class="heading-anchor" href="#pochemu-grafana-i-chat-po-otdelnosti-ne-hvataet" aria-label="Ссылка на раздел «Почему Grafana и чата по отдельности не хватает»">#</a></h2>
+
+        <p>Обычная цепочка «Alertmanager → webhook → сообщение в канал» решает доставку, но оставляет открытыми несколько вопросов:</p>
+
+        <ul>
+          <li>действительно ли кто-то уже занимается проблемой;</li>
+          <li>когда ждать следующий результат;</li>
+          <li>относятся ли двадцать сообщений к одному сбою или к разным;</li>
+          <li>что происходило при предыдущем срабатывании;</li>
+          <li>какие правила создают больше всего работы, а какие только больше всего сообщений.</li>
+        </ul>
+
+        <p>Доска алертов в Grafana частично решает первую проблему: активные сигналы больше не нужно искать только в потоке сообщений. Но она не знает, кто занимается проблемой, где идёт обсуждение, какой срок обещан и что происходило при прошлом срабатывании. Попытка отвечать на эти вопросы только реакциями и свободным текстом в чате быстро упирается в неструктурированность. Попытка перенести всё в отдельный dashboard создаёт вторую реальность, которая расходится с обсуждением.</p>
+
+        <p>Поэтому чат и dashboard должны были стать двумя представлениями одного состояния. Действие в web UI появляется в Mattermost, ответ в треде меняет карточку, а владелец и ETA в обоих интерфейсах всегда относятся к одной записи алерта.</p>
+
+        <h2 id="arhitektura">Архитектура<a class="heading-anchor" href="#arhitektura" aria-label="Ссылка на раздел «Архитектура»">#</a></h2>
+
+        <p>Подсистема алертов является частью Go-приложения. Отдельной базы данных для первой версии не заводили: активное состояние сверяется с Grafana API, а владельцы, ETA, комментарии и история действий восстанавливаются из карточек и тредов Mattermost.</p>
+
+        <div class="code-block">
+          <div class="code-label">text</div>
+          <pre><code class="language-text">Terraform alert rules
+  → Git + CI/CD
+  → Grafana Alerting / Alertmanager
+  → authenticated webhook
+  → alert record in Go
+  → Mattermost card + thread
+  → live web dashboard
+
+dashboard action / thread reply
+  → the same alert record
+  → synchronized card and live UI
+
+bot start or restart
+  → current alerts from Grafana API
+  → ownership and history from Mattermost
+  → restored dashboard
+
+Mattermost unavailable
+  → Grafana webhooks and UI continue working
+  → Mattermost synchronization resumes later</code></pre>
+        </div>
+
+        <p>Grafana отправляет для каждого инстанса fingerprint, labels, annotations, время начала и завершения, а также ссылки на правило и Silence. Backend нормализует это в <code>Record</code> и сериализует изменения по fingerprint, чтобы параллельный webhook и действие пользователя не перетёрли друг друга.</p>
+
+        <p>При открытии страницы UI получает текущий список алертов. После этого сервер присылает только изменения, поэтому страницу не нужно обновлять вручную. Действие в браузере меняет ту же запись, что кнопка или сообщение в Mattermost: состояние не расходится между двумя интерфейсами. Технически начальная загрузка работает через JSON API, а обновления — через Server-Sent Events, но вся логика переходов остаётся в Go-коде, а не в JavaScript и не в промпте.</p>
+
+        <figure>
+          <a href="assets/dashboard-architecture.svg" target="_blank">
+            <img src="assets/dashboard-architecture.svg" alt="Архитектура operational dashboard: Grafana, Go state machine, Mattermost, web UI, восстановление и AI-контур" width="1800" height="1040" loading="lazy">
+          </a>
+          <figcaption>Детерминированный контур управляет состоянием. LLM и MCP подключаются только для объяснения и обогащения.</figcaption>
+        </figure>
+
+        <h2 id="zhiznennyy-cikl-alerta">Жизненный цикл алерта<a class="heading-anchor" href="#zhiznennyy-cikl-alerta" aria-label="Ссылка на раздел «Жизненный цикл алерта»">#</a></h2>
+
+        <p>Для пользователя это обычная карточка. На сервере за ней хранится последовательность событий: когда алерт сработал, кто взял его в работу, какой поставили ETA, когда пришёл resolve и было ли повторное срабатывание. Допустимые переходы заданы явно:</p>
+
+        <div class="code-block">
+          <div class="code-label">text</div>
+          <pre><code class="language-text">fired
+  → acked
+  → eta_set
+  → eta_expired
+  → resolved
+
+другие ветки:
+  fired → closed
+  resolved / closed → refire
+  acked → reassigned</code></pre>
+        </div>
+
+        <p>У записи алерта есть время срабатывания, владелец, время принятия в работу, ETA, статус, ссылки, тред и упорядоченная хронология. При повторном срабатывании сохраняется тот же <code>ALR-N</code>, а завершённый интервал добавляется в историю. Благодаря этому можно показать «в прошлый раз», посчитать медиану длительности и не потерять связь с предыдущим обсуждением.</p>
+
+        <p>Если два инженера одновременно нажали «Взять в работу», владельцем становится тот, чей запрос сервер обработал первым. Второй инженер увидит, что карточку уже забрали, и кем именно. Система не перезаписывает владельца молча, поэтому два человека не начнут параллельно разбирать один и тот же алерт, считая его своим.</p>
+
+        <p>Когда установленный ETA заканчивается, бот автоматически напоминает об этом владельцу и участникам связанного обсуждения. Просроченная карточка остаётся заметной и в dashboard, поэтому срок не нужно держать в памяти или искать в старых сообщениях.</p>
+
+        <h2 id="odin-sluchay-vmesto-sotni-soobscheniy">Один случай вместо сотни сообщений<a class="heading-anchor" href="#odin-sluchay-vmesto-sotni-soobscheniy" aria-label="Ссылка на раздел «Один случай вместо сотни сообщений»">#</a></h2>
+
+        <p>Один Grafana rule может создать отдельный fingerprint на каждый сертификат, pod, endpoint или хост. Если просто публиковать payload, один сбой превращается в десятки одинаковых тредов.</p>
+
+        <p>Автогруппировка использует не только имя алерта. В ключ входят площадка, cluster, namespace и Grafana folder:</p>
+
+        <div class="code-block">
+          <div class="code-label">text</div>
+          <pre><code class="language-text">group key =
+  alert name
+  + site
+  + cluster
+  + namespace
+  + grafana folder</code></pre>
+        </div>
+
+        <p>Это защищает от противоположной ошибки: одинаковое правило в двух ЦОДах не должно случайно стать одним инцидентом и получить общего владельца. Инстансы внутри корректной группы используют один корневой пост и общий тред, а карточка показывает их состояние по отдельности.</p>
+
+        <figure class="figure-narrow">
+          <a href="assets/dashboard-group-thread-anon.png" target="_blank">
+            <img src="assets/dashboard-group-thread-anon.png" alt="Обезличенная раскрытая группа алертов с двумя инстансами, общими действиями и Mattermost-тредом" width="877" height="1793" loading="lazy">
+          </a>
+          <figcaption>Два firing-инстанса одного кейса: общие действия сверху, индивидуальный статус ниже и единый тред разбора.</figcaption>
+        </figure>
+
+        <p>Для независимых проблем есть ручные группы. Отдельно обрабатывается каскадный сбой: когда за короткое время срабатывает много разных правил, AI сопоставляет время, окружение, namespace, сервисы и известные инфраструктурные зависимости. Вместо десятков разрозненных карточек он предлагает кандидатов на один общий разбор.</p>
+
+        <p>Это именно предложение, а не автоматическое назначение первопричины. Два алерта могут совпасть по времени случайно, поэтому окончательную группировку подтверждает инженер. После подтверждения у каскада появляется общий владелец, ETA и тред, а отдельные сигналы остаются видны внутри группы.</p>
+
+        <h2 id="mattermost-kak-operacionnyy-zhurnal">Mattermost как операционный журнал<a class="heading-anchor" href="#mattermost-kak-operacionnyy-zhurnal" aria-label="Ссылка на раздел «Mattermost как операционный журнал»">#</a></h2>
+
+        <p>Хранить всё только в оперативной памяти нельзя: после перезапуска или публикации новой версии бота дежурный не должен увидеть пустой экран. Заводить отдельную базу только ради карточек на первом этапе тоже не хотелось.</p>
+
+        <p>Поэтому корневой пост карточки содержит не только текст для человека, но и скрытые структурированные поля: идентификатор алерта, статус, владельца и ETA. Ответы остаются обычным тредом, который читает команда. При запуске бот сканирует свои карточки и восстанавливает из этих полей рабочее состояние.</p>
+
+        <p>Это не попытка использовать чат как универсальную базу данных. В Mattermost сохраняется ровно то, что уже является частью операционного журнала: карточка, действия и обсуждение. Быстро меняющееся состояние остаётся в памяти Go-процесса, а Grafana API используется для сверки того, какие алерты действительно продолжают гореть.</p>
+
+        <p>Внешний тред расследования можно связать с <code>ALR-N</code>. Тогда ETA и resolve появляются там же, где команда обсуждает проблему, а при следующем срабатывании карточка ведёт к прошлому разбору. В пилотной версии такая история хранится один месяц: более старые треды бот не подгружает. Эту глубину можно будет пересмотреть, когда накопится статистика по повторным срабатываниям и станет понятна реальная ценность более длинной истории.</p>
+
+        <h2 id="incidenty-i-postmortem">Инциденты и postmortem<a class="heading-anchor" href="#incidenty-i-postmortem" aria-label="Ссылка на раздел «Инциденты и postmortem»">#</a></h2>
+
+        <p>Не каждый firing заслуживает отдельного postmortem. Поэтому алерт и инцидент — разные сущности. Серьёзные инциденты команда обычно разбирает в звонке, но параллельно ведёт рабочий тред во внутреннем мессенджере: туда попадают наблюдения, ссылки, промежуточные выводы и принятые решения.</p>
+
+        <p>Бот собирает сообщения из треда, связанные алерты, действия инженеров и точные времена в единую хронологию. После завершения разбора инженер может сформировать postmortem для одного или нескольких <code>ALR-N</code>. LLM структурирует уже собранные факты по четырём вопросам: что произошло, причина, что сделали и как предотвратить повтор.</p>
+
+        <p>Получившийся <code>INC-N</code> хранит ссылки на исходные алерты и обсуждение. В списке видны статус разбора, длительность, участники и автор. Хронологию и итоговый разбор можно открыть как отдельный HTML-отчёт: он удобен для ревью после звонка и не требует вручную собирать события из нескольких тредов. Прошлые инциденты можно искать не только по названию правила, но и по тексту postmortem.</p>
+
+        <figure>
+          <a href="assets/dashboard-incidents-anon.png" target="_blank">
+            <img src="assets/dashboard-incidents-anon.png" alt="Обезличенный реестр инцидентов с участниками, длительностью и статусом postmortem" width="2168" height="725" loading="lazy">
+          </a>
+          <figcaption>Алерт остаётся сигналом мониторинга, а инцидент становится отдельной записью с участниками и результатом разбора.</figcaption>
+        </figure>
+
+        <p>LLM здесь не придумывает timeline и не определяет статус. Она редактирует уже состоявшееся обсуждение. Если в треде причина не установлена, корректный postmortem должен так и сказать.</p>
+
+        <h2 id="analitika-nuzhno-schitat-keysy">В аналитике нужно считать кейсы<a class="heading-anchor" href="#analitika-nuzhno-schitat-keysy" aria-label="Ссылка на раздел «В аналитике нужно считать кейсы»">#</a></h2>
+
+        <p>Самая простая аналитика по алертам почти всегда вводит в заблуждение. Сто fingerprint одного правила выглядят как сто инцидентов. Плановые работы портят MTTR. А запрос «за 30 дней» становится неоднозначным: считать по времени firing, ack или resolve?</p>
+
+        <p>Разные показатели считаются по разным наборам событий:</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Метрика</th><th>Как попадает в период</th><th>Почему</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Объём и частота</td><td>по <code>fired_at</code></td><td>показывает, когда возникла нагрузка</td></tr>
+              <tr><td>MTTA</td><td>по <code>acked_at</code></td><td>измеряет реакцию, состоявшуюся в периоде</td></tr>
+              <tr><td>MTTR</td><td>по <code>resolved_at</code></td><td>учитывает завершённые в периоде кейсы, даже если они начались раньше</td></tr>
+              <tr><td>Firing сейчас</td><td>без временной отсечки</td><td>это текущее состояние, а не историческая выборка</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>Сырые алерты и логические кейсы показываются отдельно. Maintenance и технический noise можно исключить из основных чисел, но они не исчезают бесследно: их объём остаётся виден отдельно. Так график отвечает на вопрос о работе команды, а не о количестве строк в webhook.</p>
+
+        <p><strong>MTTA (Mean Time to Acknowledge)</strong> показывает, сколько времени прошло от срабатывания до принятия алерта в работу. <strong>MTTR (Mean Time to Resolve)</strong> — сколько времени прошло до устранения проблемы или закрытия кейса. Coverage владельцев показывает долю кейсов, которые кто-то взял, а ETA coverage — долю кейсов с указанным сроком следующего результата.</p>
+
+        <p>Также считаются просроченные ETA, self-resolved, flapping, шумящие группы, распределение по площадкам и тепловая карта по времени. AI-разбор получает уже готовый компактный JSON и только интерпретирует цифры; пересчитывать метрики модели запрещено.</p>
+
+        <figure>
+          <a href="assets/dashboard-analytics-anon.png" target="_blank">
+            <img src="assets/dashboard-analytics-anon.png" alt="Обезличенная аналитика алертов: объём, MTTR, coverage, шумящие группы, окружения и тепловая карта" width="1633" height="963" loading="lazy">
+          </a>
+          <figcaption>Аналитика разделяет raw alerts и cases, а также показывает качество процесса, хронический шум и временные пики.</figcaption>
+        </figure>
+
+        <h2 id="chto-potrebovalos-dlya-ekspluatacionnogo-kachestva">Что потребовалось для эксплуатационного качества<a class="heading-anchor" href="#chto-potrebovalos-dlya-ekspluatacionnogo-kachestva" aria-label="Ссылка на раздел «Что потребовалось для эксплуатационного качества»">#</a></h2>
+
+        <p>Основные экраны появились быстро. Большая часть работы началась во время пилота: dashboard открыли несколько сотрудников, бот стали обновлять во время активных алертов, а Mattermost перестал считаться всегда доступным.</p>
+
+        <h3 id="live-obnovleniya-bez-polling-shtorma">Live-обновления без polling-шторма<a class="heading-anchor" href="#live-obnovleniya-bez-polling-shtorma" aria-label="Ссылка на раздел «Live-обновления без polling-шторма»">#</a></h3>
+
+        <p>Начальная загрузка приходит через REST, изменения — по SSE. Серия быстрых событий объединяется в один browser render через <code>requestAnimationFrame</code>. Перезагрузка открытого треда также имеет debounce, иначе одно действие порождало несколько одинаковых запросов из SSE и optimistic update.</p>
+
+        <p>Индикатор соединения показывает, когда live-поток потерян. Это важнее автоматического retry самого браузера: пользователь должен понимать, смотрит он на актуальную очередь или на застывший снимок.</p>
+
+        <h3 id="restart-ne-dolzhen-obnulyat-dezhurstvo">Рестарт не должен обнулять дежурство<a class="heading-anchor" href="#restart-ne-dolzhen-obnulyat-dezhurstvo" aria-label="Ссылка на раздел «Рестарт не должен обнулять дежурство»">#</a></h3>
+
+        <p>Для пилота подсистему алертов не стали выносить в отдельный сервис. Она работает внутри существующего Go-бота: у него уже были read-only-доступы к внутренним системам, интеграция с Mattermost и необходимая инфраструктура. Это ускорило проверку идеи, но означало, что обновление или перезапуск бота не должны стирать состояние дежурства.</p>
+
+        <p>После запуска бот сначала быстро восстанавливает недавние карточки, чтобы интерфейс не ждал полного чтения канала. Затем в фоне он сверяет данные Mattermost с текущим списком Grafana и возвращает старые firing-алерты, которые всё ещё активны.</p>
+
+        <p>Политика хранения различает сущности:</p>
+
+        <ul>
+          <li>активный firing не удаляется из-за возраста;</li>
+          <li>resolved и closed восстанавливаются за последние 14 дней;</li>
+          <li>завершённые инциденты хранятся 365 дней;</li>
+          <li>maintenance window живёт до собственного срока окончания.</li>
+        </ul>
+
+        <p>При фоновом восстановлении историческая карточка добавляется только в том случае, если более свежего состояния ещё нет. Поэтому webhook, пришедший во время запуска, не может быть перезаписан старой копией из Mattermost. Такую гонку легко пропустить, если сначала полностью читать историю и только потом разрешать сервису принимать новые события.</p>
+
+        <h3 id="mattermost-mozhet-byt-nedostupen">Mattermost может быть недоступен<a class="heading-anchor" href="#mattermost-mozhet-byt-nedostupen" aria-label="Ссылка на раздел «Mattermost может быть недоступен»">#</a></h3>
+
+        <p>Grafana отправляет изменения алертов в Go-бот через webhook. Если Mattermost временно не отвечает, бот всё равно получает эти сообщения, обновляет состояние в памяти и передаёт его в dashboard. Карточки, которые пока не удалось создать или обновить в чате, помечаются как ожидающие синхронизации. После восстановления Mattermost бот повторяет отправку.</p>
+
+        <p>На экране в это время появляется предупреждение: данные из Grafana продолжают обновляться, но сообщения и треды Mattermost могут отставать. Дежурный сразу видит, какой частью информации можно пользоваться, а какая ещё не синхронизировалась.</p>
+
+        <h3 id="bezopasnost-vnutrennego-instrumenta">Безопасность внутреннего инструмента<a class="heading-anchor" href="#bezopasnost-vnutrennego-instrumenta" aria-label="Ссылка на раздел «Безопасность внутреннего инструмента»">#</a></h3>
+
+        <p>Webhook Grafana принимается только с отдельным Bearer token, payload ограничен по размеру и количеству алертов, а endpoint имеет rate limit. Fingerprint и параметры действий проходят allowlist-проверку формата.</p>
+
+        <p>Пользователь dashboard определяется middleware авторизации, а не полем <code>username</code> из тела запроса. Для web-доступа поддерживаются Basic Auth и OAuth. Статический HTML отдаётся с <code>ETag</code> и обязательной ревалидацией, чтобы после обновления backend пользователь не продолжал работать со старым JavaScript из кэша.</p>
+
+        <p>Это внутренний инструмент, но он умеет закрывать, назначать и комментировать реальные алерты. Значит, требования к нему ближе к операционной системе учёта, чем к read-only витрине.</p>
+
+        <h2 id="gde-zdes-ai-i-pochemu-on-ne-upravlyaet-sostoyaniem">Где здесь AI и почему он не управляет состоянием<a class="heading-anchor" href="#gde-zdes-ai-i-pochemu-on-ne-upravlyaet-sostoyaniem" aria-label="Ссылка на раздел «Где здесь AI и почему он не управляет состоянием»">#</a></h2>
+
+        <p>У бота есть LLM-агент и MCP-инструменты для инфраструктурной диагностики. Они используются в dashboard в нескольких местах:</p>
+
+        <ul>
+          <li>автоматическая первичная проверка для известных типов алертов;</li>
+          <li>поиск кандидатов на общую группу при каскадном срабатывании;</li>
+          <li>краткое «что помогло в прошлый раз» по предыдущему треду;</li>
+          <li>сводка активной очереди;</li>
+          <li>структурирование postmortem;</li>
+          <li>интерпретация уже рассчитанной аналитики.</li>
+        </ul>
+
+        <p>Но модель не решает, активен ли алерт, кто его взял, наступил ли ETA и можно ли объединить два разных ЦОДа. Эти переходы принадлежат Go-коду. Если LLM или MCP недоступны, dashboard теряет подсказку, но не operational state.</p>
+
+        <p>Это важная граница. Полезная AI-функция должна деградировать отдельно от основного процесса, иначе временный timeout модели превращается в потерю контроля над дежурством.</p>
+
+        <h2 id="ogranicheniya">Ограничения<a class="heading-anchor" href="#ogranicheniya" aria-label="Ссылка на раздел «Ограничения»">#</a></h2>
+
+        <p>У текущей реализации есть честные ограничения.</p>
+
+        <ul>
+          <li>In-memory state и восстановление из Mattermost подходят текущему масштабу, но для нескольких активных replica потребуется общий coordination/storage слой.</li>
+          <li>Dashboard пока используется в пилоте несколькими сотрудниками; процесс всей дежурной команды и передача смены ещё не переведены на него.</li>
+          <li>Качество analytics зависит от дисциплины: если инженеры не берут алерты и не ставят ETA, dashboard корректно покажет нулевое coverage, но не угадает фактическую работу вне системы.</li>
+          <li>Автогруппировка снижает шум, но не доказывает общую первопричину. Для каскада всё ещё требуется инженерное решение.</li>
+          <li>Postmortem отражает содержимое треда. Неполный разбор нельзя исправить красивым summarization.</li>
+          <li>Мы пока не измеряли ручной baseline на одинаковом наборе дежурств, поэтому не заявляем о сокращении MTTR в несколько раз.</li>
+        </ul>
+
+        <p>Последний пункт принципиален. Dashboard уже даёт наблюдаемые показатели процесса, но его ценность лучше доказывать сравнением периодов и качеством передачи смены, а не эффектной цифрой без контрольной выборки.</p>
+
+        <h2 id="chto-izmenilos-v-processe">Что меняется в пилоте<a class="heading-anchor" href="#chto-izmenilos-v-processe" aria-label="Ссылка на раздел «Что меняется в пилоте»">#</a></h2>
+
+        <p>До dashboard типовой путь выглядел так:</p>
+
+        <div class="code-block">
+          <div class="code-label">text</div>
+          <pre><code class="language-text">уведомление в канале
+  → найти нужный тред
+  → спросить, кто занимается
+  → восстановить контекст
+  → проверить Grafana
+  → передать сменщику вручную</code></pre>
+        </div>
+
+        <p>В пилоте проверяется более короткий и явный рабочий цикл:</p>
+
+        <div class="code-block">
+          <div class="code-label">text</div>
+          <pre><code class="language-text">увидеть кейс
+  → взять в работу
+  → поставить ETA
+  → вести разбор в связанном треде
+  → получить resolved из Grafana
+  → при необходимости оформить INC-N и postmortem
+  → увидеть повтор и результат в аналитике</code></pre>
+        </div>
+
+        <p>Система не устраняет инциденты сама. Она делает видимой работу между сигналом мониторинга и инженерным решением. Пока это проверяется на ограниченной группе сотрудников, но уже работает главная идея: дежурному нужен не ещё один график, а сохранённый контекст — кто занимается проблемой, что уже сделано и когда ждать следующий результат.</p>
+
+        <h2 id="materialy">Материалы<a class="heading-anchor" href="#materialy" aria-label="Ссылка на раздел «Материалы»">#</a></h2>
+
+        <ul>
+          <li>Grafana Alerting: https://grafana.com/docs/grafana/latest/alerting/</li>
+          <li>Server-Sent Events: https://html.spec.whatwg.org/multipage/server-sent-events.html</li>
+          <li>Mattermost API: https://api.mattermost.com/</li>
+          <li>Go <code>net/http</code>: https://pkg.go.dev/net/http</li>
+        </ul>
+      </article>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p>Черновик инженерной заметки о рабочем месте дежурного поверх Grafana и Mattermost. Внутренние имена и пользовательские идентификаторы обезличены.</p>
+    <a href="#top">К началу статьи</a>
+  </footer>
+
+  <script src="app.js" defer></script>
+</body>
+</html>

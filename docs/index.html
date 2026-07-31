@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Engineering Notes — инфраструктура, Kubernetes и внутренние инструменты</title>
-  <meta name="description" content="Практические инженерные разборы: инфраструктурный LLM-агент, внутренний dev cloud на KubeVirt и опыт эксплуатации платформенных инструментов.">
+  <meta name="description" content="Практические инженерные разборы: operational dashboard для алертов, инфраструктурный LLM-агент и внутренний dev cloud на KubeVirt.">
   <meta name="robots" content="index,follow">
   <meta name="theme-color" content="#f4f5f2">
   <meta property="og:type" content="website">
   <meta property="og:locale" content="ru_RU">
   <meta property="og:title" content="Engineering Notes">
   <meta property="og:description" content="Практические разборы инфраструктуры, Kubernetes и внутренних инженерных инструментов.">
-  <meta property="og:image" content="https://steemax.github.io/pages/articles/kubevirt-dev-cloud/assets/article-cover-habr.png">
+  <meta property="og:image" content="https://steemax.github.io/pages/articles/ops-dashboard/assets/article-cover-review.png">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="canonical" href="https://steemax.github.io/pages/">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><rect width=%2264%22 height=%2264%22 rx=%228%22 fill=%22%23172220%22/><text x=%2232%22 y=%2241%22 text-anchor=%22middle%22 font-family=%22monospace%22 font-size=%2222%22 fill=%22%23f4f5f2%22>EN</text></svg>">
@@ -29,8 +29,8 @@
       <h1 id="page-title">Инженерные заметки</h1>
       <p class="lead">Разборы внутренних инструментов и инфраструктурных задач: что сломалось в первой версии, какие ограничения пришлось перенести в код и что удалось подтвердить эксплуатацией.</p>
       <div class="collection-meta" aria-label="О коллекции">
-        <span>2 материала</span>
-        <span>31 минута чтения</span>
+        <span>3 материала</span>
+        <span>43 минуты чтения</span>
         <span>Обновлено в июле 2026</span>
       </div>
     </section>
@@ -42,6 +42,24 @@
       </div>
 
       <div class="article-list">
+        <a class="article-row" href="articles/ops-dashboard/">
+          <figure class="article-cover">
+            <img src="articles/ops-dashboard/assets/article-cover-review.png" alt="Обложка статьи про operational dashboard для дежурной смены" width="780" height="440">
+          </figure>
+          <div class="article-content">
+            <div class="article-meta">
+              <span>Go · Grafana · Mattermost</span>
+              <time datetime="2026-07">Июль 2026</time>
+            </div>
+            <h3>От firing до postmortem: рабочее место дежурного поверх Grafana и Mattermost</h3>
+            <p>Как связать алерт, владельца, ETA, обсуждение и postmortem в один рабочий процесс, не подменяя Grafana и внутренний мессенджер.</p>
+            <div class="article-footer">
+              <span class="article-kind">Алертинг · Внутренние инструменты</span>
+              <span class="read-link">Читать · 12 минут <span aria-hidden="true">→</span></span>
+            </div>
+          </div>
+        </a>
+
         <a class="article-row" href="articles/kubevirt-dev-cloud/">
           <figure class="article-cover">
             <img src="articles/kubevirt-dev-cloud/assets/article-cover-habr.png" alt="Обложка статьи про dev cloud на KubeVirt" width="780" height="440">
